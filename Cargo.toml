@@ -1,0 +1,12 @@
+[package]
+name = "tabster"
+version = "0.0.0"
+edition = "2021"
+readme = "./README.md"
+authors = ["luoxiaozero"]
+description = "Web Application Keyboard Navigation Tools"
+homepage = "https://github.com/thaw-ui/tabster"
+repository = "https://github.com/thaw-ui/tabster"
+license = "MIT"
+
+[dependencies]
