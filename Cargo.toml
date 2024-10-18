@@ -17,3 +17,4 @@ web-sys = { version = "0.3.72", features = [
     "TreeWalker",
     "NodeFilter",
 ] }
+uuid = { version = "1.11.0", features = ["v4", "js"] }
