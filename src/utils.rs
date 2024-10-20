@@ -34,6 +34,8 @@ pub fn create_element_tree_walker(
 
 pub enum NodeFilterEnum {
     FilterAccept,
+    FilterReject,
+    FilterSkip,
     ShowElement,
 }
 
@@ -43,6 +45,8 @@ impl Deref for NodeFilterEnum {
     fn deref(&self) -> &Self::Target {
         match self {
             Self::FilterAccept => &1,
+            Self::FilterReject => &2,
+            Self::FilterSkip => &3,
             Self::ShowElement => &0x1,
         }
     }
@@ -64,9 +68,14 @@ pub fn get_last_child(container: HtmlElement) -> Option<HtmlElement> {
 static TABSTER_INSTANCE_CONTEXT: OnceLock<RwLock<HashMap<String, Arc<InstanceContext>>>> =
     OnceLock::new();
 
+
+// struct InternalBasics {
+
+// }
+
 struct InstanceContext {
     // elementByUId: { [uid: string]: WeakHTMLElement<HTMLElementWithUID> };
-    // basics: InternalBasics;
+    // basics: InternalBasics,
     // WeakRef?: WeakRefConstructor;
     // containerBoundingRectCache: {
     //     [id: string]: {
@@ -135,3 +144,83 @@ pub fn get_instance_context(get_window: GetWindow) -> Arc<InstanceContext> {
 //     const ctx = (win as WindowWithUtilsConext).__tabsterInstanceContext;
 //     return new (ctx?.basics.WeakMap || WeakMap)();
 // }
+
+pub fn matches_selector(element: HtmlElement, selector: String) -> bool {
+    element.matches(&selector).unwrap_throw()
+}
+
+pub fn is_display_none(element: HtmlElement) -> bool {
+    let element_document = element.owner_document().unwrap_throw();
+
+    let computed_style = {
+        let Some(default_view) = element_document.default_view() else {
+            return false;
+        };
+        default_view.get_computed_style(&element).unwrap_throw()
+    };
+
+    // offsetParent is null for elements with display:none, display:fixed and for <body>.
+    if element.offset_parent().is_none()
+        && element_document.body().as_ref() != Some(&element)
+        && computed_style
+            .as_ref()
+            .map(|c| c.get_property_value("position").unwrap_throw())
+            != Some("fixed".into())
+    {
+        return true;
+    }
+
+    // For our purposes of looking for focusable elements, visibility:hidden has the same
+    // effect as display:none.
+    if computed_style
+        .as_ref()
+        .map(|c| c.get_property_value("visibility").unwrap_throw())
+        == Some("hidden".into())
+    {
+        return true;
+    }
+
+    // if an element has display: fixed, we need to check if it is also hidden with CSS,
+    // or within a parent hidden with CSS
+    if computed_style
+        .as_ref()
+        .map(|c| c.get_property_value("position").unwrap_throw())
+        == Some("fixed".into())
+    {
+        if computed_style
+            .as_ref()
+            .map(|c| c.get_property_value("display").unwrap_throw())
+            == Some("none".into())
+        {
+            return true;
+        }
+
+        let Some(parent_element) = element.parent_element() else {
+            return false;
+        };
+
+        let Ok(parent_element) = parent_element.dyn_into::<HtmlElement>() else {
+            return false;
+        };
+
+        if parent_element.offset_parent().is_none()
+            && element_document.body().map(|b| b.into()) != element.parent_element()
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// If the passed element is Tabster dummy input, returns the container element this dummy input belongs to.
+/// element: Element to check for being dummy input.
+/// returns: Dummy input container element (if the passed element is a dummy input) or null.
+pub fn get_dummy_input_container(element: Option<HtmlElement>) -> Option<HtmlElement> {
+    // return (
+    //     (
+    //         element as HTMLElementWithDummyContainer | null | undefined
+    //     )?.__tabsterDummyContainer?.get() || null
+    // );
+    None
+}

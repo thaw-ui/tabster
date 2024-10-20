@@ -1,25 +1,127 @@
 use crate::{
+    consts::FOCUSABLE_SELECTOR,
+    dom_api::DOM,
+    instance::get_tabster_on_element,
     root::RootAPI,
     tabster::TabsterCore,
     types::{
         FindAllProps, FindFirstProps, FindFocusableOutputProps, FindFocusableProps,
-        FocusableAcceptElementState,
+        FocusableAcceptElementState, DOMAPI,
     },
-    utils::{create_element_tree_walker, get_last_child, NodeFilterEnum},
+    utils::{
+        create_element_tree_walker, get_dummy_input_container, get_last_child, is_display_none,
+        matches_selector, NodeFilterEnum,
+    },
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
-    HtmlElement,
+    HtmlElement, Node,
 };
 
+#[derive(Clone)]
 pub struct FocusableAPI {
-    tabster: TabsterCore,
+    tabster: Arc<RefCell<TabsterCore>>,
 }
 
 impl FocusableAPI {
     pub fn new(tabster: TabsterCore) -> Self {
-        Self { tabster }
+        Self {
+            tabster: Arc::new(RefCell::new(tabster)),
+        }
+    }
+
+    fn is_focusable(
+        &self,
+        el: HtmlElement,
+        include_programmatically_focusable: Option<bool>,
+        no_visible_check: Option<bool>,
+        no_accessible_check: Option<bool>,
+    ) -> bool {
+        if matches_selector(el.clone(), FOCUSABLE_SELECTOR.to_string())
+            && (include_programmatically_focusable.unwrap_or_default() || el.tab_index() != -1)
+        {
+            (no_visible_check.unwrap_or_default() || FocusableAPI::is_visible(el.clone()))
+                && (no_accessible_check.unwrap_or_default() || self.is_accessible(el.clone()))
+        } else {
+            false
+        }
+    }
+
+    fn is_visible(el: HtmlElement) -> bool {
+        let Some(owner_document) = el.owner_document() else {
+            return false;
+        };
+        if el.owner_document().is_none() || el.node_type() != Node::ELEMENT_NODE {
+            return false;
+        }
+
+        if is_display_none(el.clone()) {
+            return false;
+        }
+
+        let rect = owner_document
+            .body()
+            .unwrap_throw()
+            .get_bounding_client_rect();
+
+        if rect.width() == 0.0 && rect.height() == 0.0 {
+            // This might happen, for example, if our <body> is in hidden <iframe>.
+            return false;
+        }
+
+        return true;
+    }
+
+    fn is_accessible(&self, el: HtmlElement) -> bool {
+        let mut e = Some(el);
+        loop {
+            let Some(e_ref) = e.as_ref() else {
+                break;
+            };
+
+            let tabster_on_element = get_tabster_on_element(self.tabster.clone(), e_ref);
+
+            if self.is_hidden(e_ref.clone()) {
+                return false;
+            }
+            let Some(tabster_on_element) = tabster_on_element else {
+                return false;
+            };
+
+            let Some(focusable) = tabster_on_element.focusable.as_ref() else {
+                return false;
+            };
+            let ignore_disabled = focusable.ignore_aria_disabled;
+            if !ignore_disabled.unwrap_or_default() && FocusableAPI::is_disabled(e_ref) {
+                return false;
+            }
+
+            e = DOM::get_parent_element(e.clone());
+        }
+
+        true
+    }
+
+    fn is_disabled(el: &HtmlElement) -> bool {
+        el.has_attribute("disabled")
+    }
+
+    fn is_hidden(&self, el: HtmlElement) -> bool {
+        let Some(attr_val) = el.get_attribute("aria-hidden") else {
+            return false;
+        };
+
+        if attr_val.to_lowercase() == "true" {
+            let tabster = self.tabster.borrow();
+            if let Some(modalizer) = tabster.modalizer.as_ref() {
+                if !(modalizer.is_augmented)(el.clone()) {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     pub fn find_last(&mut self, options: FindFirstProps, out: FindFocusableOutputProps) {
@@ -54,19 +156,38 @@ impl FocusableAPI {
         let FindFocusableProps {
             container,
             current_element,
+            include_programmatically_focusable,
+            ignore_accessibility,
             is_backward,
             on_element,
+            accept_condition,
         } = options;
 
         let mut elements = Vec::<HtmlElement>::new();
 
+        let accept_condition = accept_condition.unwrap_or_else({
+            || {
+                let this = self.clone();
+                Box::new(move |el| {
+                    this.is_focusable(
+                        el,
+                        include_programmatically_focusable,
+                        Some(false),
+                        ignore_accessibility,
+                    )
+                })
+            }
+        });
+
         let accept_element_state = FocusableAcceptElementState {
+            accept_condition,
             container: container.clone(),
             from: current_element.unwrap_or_else(|| container.clone()),
             from_ctx: None,
             found: None,
             found_element: None,
             found_backward: None,
+            reject_elements_from: None,
             skipped_focusable: None,
         };
         let accept_element_state = Arc::new(RefCell::new(accept_element_state));
@@ -87,7 +208,7 @@ impl FocusableAPI {
                   elements: &mut Vec<HtmlElement>,
                   on_element: &Option<Box<dyn Fn(HtmlElement) -> bool>>,
                   out: &mut FindFocusableOutputProps,
-                  tabster: &mut TabsterCore|
+                  tabster: Arc<RefCell<TabsterCore>>|
                   -> bool {
                 let mut accept_element_state = accept_element_state.try_borrow_mut().unwrap_throw();
                 let found_element = if let Some(found_element) =
@@ -146,7 +267,7 @@ impl FocusableAPI {
                     &mut elements,
                     &on_element,
                     &mut out,
-                    &mut self.tabster,
+                    self.tabster.clone(),
                 )
             {
                 let accept_element_state = accept_element_state.try_borrow().unwrap_throw();
@@ -171,7 +292,7 @@ impl FocusableAPI {
                 &mut elements,
                 &on_element,
                 &mut out,
-                &mut self.tabster,
+                self.tabster.clone(),
             ) {
                 break;
             }
@@ -193,10 +314,56 @@ impl FocusableAPI {
         element: HtmlElement,
         state: &Arc<RefCell<FocusableAcceptElementState>>,
     ) -> u32 {
-        let state = state.try_borrow().unwrap_throw();
+        let mut state = state.try_borrow_mut().unwrap_throw();
         if matches!(state.found, Some(true)) {
             return *NodeFilterEnum::FilterAccept;
         }
-        todo!()
+
+        let found_backward = state.found_backward.clone();
+
+        if found_backward.is_some()
+            && (Some(&element) == found_backward.as_ref()
+                || !DOM::node_contains(
+                    found_backward.clone().map(|f| f.into()),
+                    Some(element.clone().into()),
+                ))
+        {
+            state.found = Some(true);
+            state.found_element = found_backward;
+            return *NodeFilterEnum::FilterAccept;
+        }
+
+        let container = state.container.clone();
+
+        if element == container {
+            return *NodeFilterEnum::FilterSkip;
+        }
+
+        if !DOM::node_contains(Some(container.into()), Some(element.clone().into())) {
+            return *NodeFilterEnum::FilterReject;
+        }
+
+        if get_dummy_input_container(Some(element.clone())).is_some() {
+            return *NodeFilterEnum::FilterReject;
+        }
+
+        if DOM::node_contains(
+            state.reject_elements_from.clone().map(|r| r.into()),
+            Some(element.clone().into()),
+        ) {
+            return *NodeFilterEnum::FilterReject;
+        }
+
+        let mut result = None::<u32>;
+
+        if result.is_none() {
+            result = if (state.accept_condition)(element) {
+                Some(*NodeFilterEnum::FilterAccept)
+            } else {
+                Some(*NodeFilterEnum::FilterSkip)
+            }
+        }
+
+        result.unwrap()
     }
 }

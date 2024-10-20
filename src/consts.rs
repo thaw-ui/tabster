@@ -1,0 +1,1 @@
+pub const FOCUSABLE_SELECTOR: &'static str = "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), *[tabindex], *[contenteditable], details > summary, audio[controls], video[controls]";

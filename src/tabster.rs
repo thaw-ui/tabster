@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Weak};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     dom_api::DOM,
@@ -6,7 +6,7 @@ use crate::{
     root::WindowWithTabsterInstance,
     types::{self, TabsterCoreProps, DOMAPI},
 };
-use web_sys::{wasm_bindgen::convert::ReturnWasmAbi, HtmlElement, Node, Window};
+use web_sys::{js_sys::WeakMap, HtmlElement, Node, Window};
 
 pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
     let tabster = TabsterCore::new(win, props);
@@ -26,11 +26,50 @@ impl Tabster {
     }
 }
 
+// TODO Memory leak
+struct TabsterCoreStorage {
+    storage: web_sys::js_sys::WeakMap,
+    data: HashMap<String, Arc<types::TabsterElementStorage>>,
+}
+
+impl TabsterCoreStorage {
+    fn new() -> Self {
+        Self {
+            storage: WeakMap::new(),
+            data: HashMap::new(),
+        }
+    }
+    fn get_storage_value(&self, el: &HtmlElement) -> Option<String> {
+        let value = self.storage.get(el);
+        value.as_string()
+    }
+    fn get(&self, el: &HtmlElement) -> Option<Arc<types::TabsterElementStorage>> {
+        let value = self.get_storage_value(el)?;
+        self.data.get(&value).cloned()
+    }
+
+    fn set(&mut self, el: &HtmlElement, value: Arc<types::TabsterElementStorage>) {
+        let uuid = uuid::Uuid::new_v4().to_string();
+        self.storage
+            .set(el, &web_sys::wasm_bindgen::JsValue::from_str(&uuid));
+        self.data.insert(uuid, value);
+    }
+
+    fn delete(&mut self, el: &HtmlElement) {
+        if let Some(value) = self.get_storage_value(el) {
+            self.data.remove(&value);
+        }
+        self.storage.delete(&el);
+    }
+}
+
 pub struct TabsterCore {
-    storage: HashMap<HtmlElement, types::TabsterElementStorage>,
+    storage: TabsterCoreStorage,
     win: Option<WindowWithTabsterInstance>,
     init_queue: Vec<Box<dyn FnOnce()>>,
 
+    // Extended APIs
+    pub modalizer: Option<types::ModalizerAPI>,
     pub get_parent: Box<dyn Fn(Node) -> Option<Node>>,
 }
 
@@ -40,9 +79,10 @@ impl TabsterCore {
             .get_parent
             .unwrap_or_else(|| Box::new(move |node| DOM::get_parent_node(Some(node))));
         Self {
-            storage: HashMap::new(),
+            storage: TabsterCoreStorage::new(),
             get_parent,
             win: Some(win),
+            modalizer: None,
             init_queue: Vec::new(),
         }
     }
@@ -62,22 +102,20 @@ impl TabsterCore {
     }
 
     pub fn storage_entry(
-        &self,
-        element: HtmlElement,
+        &mut self,
+        element: &HtmlElement,
         addremove: Option<bool>,
-    ) -> Option<types::TabsterElementStorageEntry> {
-        // let entry = self.storage.get(element.return_abi());
+    ) -> Option<Arc<types::TabsterElementStorageEntry>> {
+        let mut entry = self.storage.get(element);
+        if let Some(entry) = entry.as_ref() {
+            if matches!(addremove, Some(false)) && entry.is_empty() {
+                self.storage.delete(element);
+            }
+        } else if matches!(addremove, Some(true)) {
+            entry = Some(Arc::new(types::TabsterElementStorageEntry::new()));
+            self.storage.set(element, entry.clone().unwrap());
+        }
 
-        // if (entry) {
-        //     if (addremove === false && Object.keys(entry).length === 0) {
-        //         storage.delete(element);
-        //     }
-        // } else if (addremove === true) {
-        //     entry = {};
-        //     storage.set(element, entry);
-        // }
-
-        // return entry;
-        todo!()
+        entry
     }
 }

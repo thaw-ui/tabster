@@ -13,6 +13,8 @@ license = "MIT"
 web-sys = { version = "0.3.72", features = [
     "Document",
     "Window",
+    "CssStyleDeclaration",
+    "DomRect",
     "HtmlElement",
     "TreeWalker",
     "NodeFilter",

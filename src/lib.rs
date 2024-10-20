@@ -1,3 +1,4 @@
+mod consts;
 mod dom_api;
 mod focusable;
 mod instance;
@@ -6,4 +7,5 @@ mod tabster;
 pub mod types;
 mod utils;
 
-pub use tabster::create_tabster;
+pub use focusable::FocusableAPI;
+pub use tabster::{create_tabster, Tabster};

@@ -1,6 +1,29 @@
-use std::collections::HashMap;
-
+use std::sync::Arc;
 use web_sys::{Document, Element, HtmlElement, Node, NodeFilter, TreeWalker, Window};
+
+pub struct FocusableProps {
+    /// Do not determine an element's focusability based on aria-disabled.
+    pub ignore_aria_disabled: Option<bool>,
+}
+
+pub struct UncontrolledProps {
+    // Normally, even uncontrolled areas should not be completely uncontrolled
+    // to be able to interact with the rest of the application properly.
+    // For example, if an uncontrolled area implements something like
+    // roving tabindex, it should be uncontrolled inside the area, but it
+    // still should be able to be an organic part of the application.
+    // However, in some cases, third party component might want to be able
+    // to gain full control of the area, for example, if it implements
+    // some custom trap focus logic.
+    // `completely` indicates that uncontrolled area must gain full control over
+    // Tab handling. If not set, Tabster might still handle Tab in the
+    // uncontrolled area, when, for example, there is an inactive Modalizer
+    // (that needs to be skipped) after the last focusable element of the
+    // uncontrolled area.
+    // WARNING: Use with caution, as it might break the normal keyboard navigation
+    // between the uncontrolled area and the rest of the application.
+    completely: Option<bool>,
+}
 
 #[derive(Debug, Default)]
 pub struct GetTabsterContextOptions {
@@ -16,12 +39,16 @@ pub struct GetTabsterContextOptions {
     pub reference_element: Option<HtmlElement>,
 }
 
-#[derive(Debug, Clone)]
 pub struct TabsterContext {
+    pub root: Root,
     pub uncontrolled: Option<HtmlElement>,
 }
 
 pub struct Root {}
+
+pub struct ModalizerAPI {
+    pub is_augmented: Box<dyn Fn(HtmlElement) -> bool>,
+}
 
 #[derive(Debug, Default)]
 pub struct FindFocusableOutputProps {
@@ -38,8 +65,15 @@ pub struct FindFocusableProps {
     pub container: HtmlElement,
     /// The elemet to start from.
     pub current_element: Option<HtmlElement>,
+    /// Includes elements that can be focused programmatically.
+    pub include_programmatically_focusable: Option<bool>,
+    /// Ignore accessibility check.
+    pub ignore_accessibility: Option<bool>,
     /// If true, find previous element instead of the next one.
     pub is_backward: Option<bool>,
+    /// el: element visited.
+    /// returns: if an element should be accepted.
+    pub accept_condition: Option<Box<dyn Fn(HtmlElement) -> bool>>,
     /// A callback that will be called for every focusable element found during findAll().
     /// If false is returned from this callback, the search will stop.
     pub on_element: Option<FindElementCallback>,
@@ -52,7 +86,10 @@ impl From<FindFirstProps> for FindFocusableProps {
         Self {
             container: value.container,
             current_element: None,
+            include_programmatically_focusable: None,
+            ignore_accessibility: None,
             is_backward: None,
+            accept_condition: None,
             on_element: None,
         }
     }
@@ -63,7 +100,10 @@ impl From<FindAllProps> for FindFocusableProps {
         Self {
             container: value.container,
             current_element: None,
+            include_programmatically_focusable: None,
+            ignore_accessibility: None,
             is_backward: None,
+            accept_condition: None,
             on_element: None,
         }
     }
@@ -97,12 +137,15 @@ pub trait DOMAPI {
 
     fn get_parent_node(node: Option<Node>) -> Option<ParentNode>;
 
+    fn get_parent_element(element: Option<HtmlElement>) -> Option<HtmlElement>;
+
+    fn node_contains(parent: Option<Node>, child: Option<Node>) -> bool;
+
     fn get_last_element_child(element: Option<Element>) -> Option<Element>;
 }
 
 pub type GetWindow = Box<dyn Fn() -> Window>;
 
-#[derive(Debug, Clone)]
 pub struct FocusableAcceptElementState {
     pub container: HtmlElement,
     pub from: HtmlElement,
@@ -110,17 +153,36 @@ pub struct FocusableAcceptElementState {
     pub found: Option<bool>,
     pub found_element: Option<HtmlElement>,
     pub found_backward: Option<HtmlElement>,
+    pub reject_elements_from: Option<HtmlElement>,
+    pub accept_condition: Box<dyn Fn(HtmlElement) -> bool>,
     /// A flag that indicates that some focusable elements were skipped
     /// during the search and the found element is not the one the browser
     /// would normally focus if the user pressed Tab.
     pub skipped_focusable: Option<bool>,
 }
 
-pub struct TabsterOnElement {}
-
-pub struct TabsterElementStorageEntry {
-    pub tabster: Option<TabsterOnElement>, // attr?: TabsterAttributeOnElement;
-                                           // aug?: TabsterAugmentedAttributes;
+pub struct TabsterOnElement {
+    pub focusable: Option<FocusableProps>,
+    pub uncontrolled: Option<UncontrolledProps>,
 }
 
-pub type TabsterElementStorage = HashMap<String, TabsterElementStorageEntry>;
+pub struct TabsterElementStorageEntry {
+    pub tabster: Option<Arc<TabsterOnElement>>, // attr?: TabsterAttributeOnElement;
+                                                // aug?: TabsterAugmentedAttributes;
+}
+
+impl TabsterElementStorageEntry {
+    pub fn new() -> Self {
+        Self { tabster: None }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        if self.tabster.is_some() {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+pub type TabsterElementStorage = TabsterElementStorageEntry;

@@ -1,5 +1,8 @@
 use crate::types;
-use web_sys::{wasm_bindgen::UnwrapThrowExt, Document, Element, Node, NodeFilter, TreeWalker};
+use web_sys::{
+    wasm_bindgen::{JsCast, UnwrapThrowExt},
+    Document, Element, Node, NodeFilter, TreeWalker,
+};
 
 pub struct DOM;
 
@@ -16,6 +19,20 @@ impl types::DOMAPI for DOM {
 
     fn get_parent_node(node: Option<Node>) -> Option<types::ParentNode> {
         node?.parent_node()
+    }
+
+    fn get_parent_element(element: Option<web_sys::HtmlElement>) -> Option<web_sys::HtmlElement> {
+        element?
+            .parent_element()
+            .map(|e| e.dyn_into().unwrap_throw())
+    }
+
+    fn node_contains(parent: Option<Node>, child: Option<Node>) -> bool {
+        let Some(parent) = parent else {
+            return false;
+        };
+
+        parent.contains(child.as_ref())
     }
 
     fn get_last_element_child(element: Option<Element>) -> Option<Element> {
