@@ -111,7 +111,7 @@ impl From<FindAllProps> for FindFocusableProps {
 
 pub struct FindFirstProps {
     /// The container used for the search.
-    container: HtmlElement,
+    pub container: HtmlElement,
 }
 
 pub struct FindAllProps {
