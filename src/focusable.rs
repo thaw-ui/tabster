@@ -5,7 +5,7 @@ use crate::{
     root::RootAPI,
     tabster::TabsterCore,
     types::{
-        FindAllProps, FindFirstProps, FindFocusableOutputProps, FindFocusableProps,
+        self, FindAllProps, FindFirstProps, FindFocusableOutputProps, FindFocusableProps,
         FocusableAcceptElementState, DOMAPI,
     },
     utils::{
@@ -25,10 +25,8 @@ pub struct FocusableAPI {
 }
 
 impl FocusableAPI {
-    pub fn new(tabster: TabsterCore) -> Self {
-        Self {
-            tabster: Arc::new(RefCell::new(tabster)),
-        }
+    pub fn new(tabster: Arc<RefCell<TabsterCore>>) -> Self {
+        Self { tabster }
     }
 
     fn is_focusable(
@@ -124,14 +122,48 @@ impl FocusableAPI {
         false
     }
 
-    pub fn find_last(&mut self, options: FindFirstProps, out: FindFocusableOutputProps) {
+    pub fn find_first(
+        &mut self,
+        options: FindFirstProps,
+        out: FindFocusableOutputProps,
+    ) -> Option<HtmlElement> {
+        self.find_element(options.into(), out)
+    }
+
+    pub fn find_last(
+        &mut self,
+        options: FindFirstProps,
+        out: FindFocusableOutputProps,
+    ) -> Option<HtmlElement> {
         self.find_element(
             FindFocusableProps {
                 is_backward: Some(true),
                 ..options.into()
             },
             out,
-        );
+        )
+    }
+
+    pub fn find_next(
+        &mut self,
+        options: types::FindNextProps,
+        out: FindFocusableOutputProps,
+    ) -> Option<HtmlElement> {
+        self.find_element(options.into(), out)
+    }
+
+    pub fn find_prev(
+        &mut self,
+        options: types::FindNextProps,
+        out: FindFocusableOutputProps,
+    ) -> Option<HtmlElement> {
+        self.find_element(
+            FindFocusableProps {
+                is_backward: Some(true),
+                ..options.into()
+            },
+            out,
+        )
     }
 
     pub fn find_all(&mut self, options: FindAllProps, out: FindFocusableOutputProps) {

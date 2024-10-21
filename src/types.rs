@@ -1,9 +1,41 @@
 use std::sync::Arc;
-use web_sys::{Document, Element, HtmlElement, Node, NodeFilter, TreeWalker, Window};
+use web_sys::{
+    Document, Element, HtmlElement, KeyboardEvent, Node, NodeFilter, TreeWalker, Window,
+};
+
+use crate::{groupper::Groupper, modalizer::Modalizer, mover::Mover};
+
+#[derive(Debug, Default)]
+pub struct IgnoreKeydown {
+    tab: Option<bool>,
+    // Escape?: boolean;
+    // Enter?: boolean;
+    // ArrowUp?: boolean;
+    // ArrowDown?: boolean;
+    // ArrowLeft?: boolean;
+    // ArrowRight?: boolean;
+    // PageUp?: boolean;
+    // PageDown?: boolean;
+    // Home?: boolean;
+    // End?: boolean;
+}
+
+impl IgnoreKeydown {
+    pub fn get(&self, key: &str) -> Option<bool> {
+        match key {
+            "tab" => self.tab,
+            _ => None,
+        }
+    }
+}
 
 pub struct FocusableProps {
     /// Do not determine an element's focusability based on aria-disabled.
     pub ignore_aria_disabled: Option<bool>,
+    /// Exclude element (and all subelements) from Mover navigation.
+    pub exclude_from_mover: Option<bool>,
+    /// Prevents tabster from handling the keydown event
+    pub ignore_keydown: Option<IgnoreKeydown>,
 }
 
 pub struct UncontrolledProps {
@@ -41,7 +73,12 @@ pub struct GetTabsterContextOptions {
 
 pub struct TabsterContext {
     pub root: Root,
+    pub groupper_before_mover: Option<bool>,
+    /// Whether `dir='rtl'` is set on an ancestor
+    pub rtl: Option<bool>,
+    pub excluded_from_mover: Option<bool>,
     pub uncontrolled: Option<HtmlElement>,
+    pub ignore_keydown: Box<dyn Fn(KeyboardEvent) -> bool>,
 }
 
 pub struct Root {}
@@ -95,6 +132,20 @@ impl From<FindFirstProps> for FindFocusableProps {
     }
 }
 
+impl From<FindNextProps> for FindFocusableProps {
+    fn from(value: FindNextProps) -> Self {
+        Self {
+            container: value.container,
+            current_element: value.current_element,
+            include_programmatically_focusable: None,
+            ignore_accessibility: None,
+            is_backward: None,
+            accept_condition: None,
+            on_element: None,
+        }
+    }
+}
+
 impl From<FindAllProps> for FindFocusableProps {
     fn from(value: FindAllProps) -> Self {
         Self {
@@ -114,12 +165,39 @@ pub struct FindFirstProps {
     pub container: HtmlElement,
 }
 
+pub struct FindNextProps {
+    /// The elemet to start from.
+    pub current_element: Option<HtmlElement>,
+    /// The container used for the search.
+    pub container: HtmlElement,
+}
+
 pub struct FindAllProps {
     /// The container used for the search.
     container: HtmlElement,
 }
 
+pub struct RestoreFocusOrder {
+    history: u32,
+    deloser_default: u32,
+    root_default: u32,
+    deloser_first: u32,
+    root_first: u32,
+}
+
+pub struct RootProps {
+    restore_focus_order: Option<RestoreFocusOrder>,
+}
+
+pub struct TabsterProps {
+    pub auto_root: Option<RootProps>,
+    /// Custom getter for parent elements. Defaults to the default .parentElement call
+    /// Currently only used to detect tabster contexts
+    pub get_parent: Option<Box<dyn Fn(Node) -> Option<Node>>>,
+}
+
 pub struct TabsterCoreProps {
+    pub auto_root: Option<RootProps>,
     /// Custom getter for parent elements. Defaults to the default .parentElement call
     /// Currently only used to detect tabster contexts
     pub get_parent: Option<Box<dyn Fn(Node) -> Option<Node>>>,
@@ -162,6 +240,9 @@ pub struct FocusableAcceptElementState {
 }
 
 pub struct TabsterOnElement {
+    pub mover: Mover,
+    pub groupper: Option<Groupper>,
+    pub modalizer: Option<Modalizer>,
     pub focusable: Option<FocusableProps>,
     pub uncontrolled: Option<UncontrolledProps>,
 }
@@ -186,3 +267,13 @@ impl TabsterElementStorageEntry {
 }
 
 pub type TabsterElementStorage = TabsterElementStorageEntry;
+
+pub struct TabsterAttributeProps {}
+
+impl TabsterAttributeProps {
+    pub fn json_string(self) -> String {
+        String::new()
+    }
+}
+
+pub type TabsterDOMAttribute = (String, String);

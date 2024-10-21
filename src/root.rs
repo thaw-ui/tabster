@@ -1,17 +1,28 @@
 use crate::{
+    groupper::Groupper,
     instance::get_tabster_on_element,
+    modalizer::Modalizer,
+    mover::Mover,
     tabster::TabsterCore,
     types::{self, GetTabsterContextOptions, TabsterContext},
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
-    HtmlElement, Node, Window,
+    HtmlElement, KeyboardEvent, Node, Window,
 };
 
 pub type WindowWithTabsterInstance = Window;
 
-pub struct RootAPI;
+pub struct RootAPI {
+    tabster: Arc<RefCell<TabsterCore>>,
+}
+
+impl RootAPI {
+    pub fn new(tabster: Arc<RefCell<TabsterCore>>) -> Self {
+        Self { tabster }
+    }
+}
 
 impl RootAPI {
     /// Fetches the tabster context for an element walking up its ancestors
@@ -46,16 +57,16 @@ impl RootAPI {
         }
 
         let root: Option<types::Root> = None;
-        // let modalizer: Types.Modalizer | undefined;
-        // let groupper: Types.Groupper | undefined;
-        // let mover: Types.Mover | undefined;
-        let excluded_from_mover = false;
-        // let groupperBeforeMover: boolean | undefined;
-        // let modalizerInGroupper: Types.Groupper | undefined;
+        let mut modalizer = None::<Modalizer>;
+        let groupper = None::<Groupper>;
+        let mover = None::<Mover>;
+        let mut excluded_from_mover = false;
+        let mut groupper_before_mover = None::<bool>;
+        let modalizer_in_groupper = None::<Groupper>;
         let mut dir_right_to_left: Option<bool> = None;
         let mut uncontrolled = None::<HtmlElement>;
         let mut cur_element = Some(reference_element.map_or(element, |el| el.into()));
-        // const ignoreKeydown: Types.FocusableProps["ignoreKeydown"] = {};
+        let ignore_keydown = types::IgnoreKeydown::default(); // Types.FocusableProps["ignoreKeydown"] = {};
 
         loop {
             let Some(new_cur_element) = cur_element.clone() else {
@@ -102,39 +113,44 @@ impl RootAPI {
                 uncontrolled = Some(new_cur_element.clone().dyn_into().unwrap_throw());
             }
 
-            // if (
-            //     !mover &&
-            //     tabsterOnElement.focusable?.excludeFromMover &&
-            //     !groupper
-            // ) {
-            //     excludedFromMover = true;
-            // }
+            if mover.is_none() && groupper.is_none() {
+                if let Some(focusable) = tabster_on_element.focusable.as_ref() {
+                    if focusable.exclude_from_mover.unwrap_or_default() {
+                        excluded_from_mover = true;
+                    }
+                }
+            }
 
-            // const curModalizer = tabsterOnElement.modalizer;
-            // const curGroupper = tabsterOnElement.groupper;
-            // const curMover = tabsterOnElement.mover;
+            let cur_modalizer = &tabster_on_element.modalizer;
+            let cur_groupper = &tabster_on_element.groupper;
+            let cur_mover = &tabster_on_element.mover;
 
-            // if (!modalizer && curModalizer) {
-            //     modalizer = curModalizer;
-            // }
+            if modalizer.is_none() {
+                if let Some(cur_modalizer) = cur_modalizer {
+                    // modalizer = Some(cur_modalizer);
+                }
+            }
 
-            // if (!groupper && curGroupper && (!modalizer || curModalizer)) {
-            //     if (modalizer) {
-            //         // Modalizer dominates the groupper when they are on the same node and the groupper is active.
-            //         if (
-            //             !curGroupper.isActive() &&
-            //             curGroupper.getProps().tabbability &&
-            //             modalizer.userId !== tabster.modalizer?.activeId
-            //         ) {
-            //             modalizer = undefined;
-            //             groupper = curGroupper;
-            //         }
+            if groupper.is_none()
+                && cur_groupper.is_some()
+                && (modalizer.is_none() || cur_modalizer.is_some())
+            {
+                if (modalizer.is_some()) {
+                    // Modalizer dominates the groupper when they are on the same node and the groupper is active.
+                    //         if (
+                    //             !curGroupper.isActive() &&
+                    //             curGroupper.getProps().tabbability &&
+                    //             modalizer.userId !== tabster.modalizer?.activeId
+                    //         ) {
+                    //             modalizer = undefined;
+                    //             groupper = curGroupper;
+                    //         }
 
-            //         modalizerInGroupper = curGroupper;
-            //     } else {
-            //         groupper = curGroupper;
-            //     }
-            // }
+                    //         modalizerInGroupper = curGroupper;
+                } else {
+                    //         groupper = curGroupper;
+                }
+            }
 
             // if (
             //     !mover &&
@@ -166,7 +182,8 @@ impl RootAPI {
 
         // No root element could be found, try to get an auto root
         if root.is_none() {
-            // const rootAPI = tabster.root as RootAPI;
+            let tabster = tabster.borrow();
+            // let rootAPI = tabster.root;
             // const autoRoot = rootAPI._autoRoot;
 
             // if (autoRoot) {
@@ -176,42 +193,41 @@ impl RootAPI {
             // }
         }
 
-        // if (groupper && !mover) {
-        //     groupperBeforeMover = true;
-        // }
+        if groupper.is_some() && mover.is_none() {
+            groupper_before_mover = Some(true);
+        }
 
-        // if (__DEV__ && !root) {
-        //     if (modalizer || groupper || mover) {
-        //         console.error(
-        //             "Tabster Root is required for Mover, Groupper and Modalizer to work."
-        //         );
-        //     }
-        // }
+        #[cfg(debug_assertions)]
+        if root.is_none() {
+            if modalizer.is_some() || groupper.is_some() || mover.is_some() {
+                web_sys::console::error_1(&web_sys::wasm_bindgen::JsValue::from_str(
+                    "Tabster Root is required for Mover, Groupper and Modalizer to work.",
+                ));
+            }
+        }
 
-        // const shouldIgnoreKeydown = (event: KeyboardEvent) =>
-        //     !!ignoreKeydown[
-        //         event.key as keyof Types.FocusableProps["ignoreKeydown"]
-        //     ];
+        let should_ignore_keydown = move |event: KeyboardEvent| {
+            let key = event.key();
+            ignore_keydown.get(&key).unwrap_or_default()
+        };
 
         if let Some(root) = root {
-            Some(TabsterContext { root, uncontrolled })
+            Some(TabsterContext {
+                root,
+                groupper_before_mover,
+                rtl: check_rtl
+                    .unwrap_or_default()
+                    .then(|| dir_right_to_left.unwrap_or_default()),
+                excluded_from_mover: Some(excluded_from_mover),
+                uncontrolled,
+                ignore_keydown: Box::new(should_ignore_keydown),
+                //           modalizer,
+                //           groupper,
+                //           mover,
+                //           modalizerInGroupper,
+            })
         } else {
             None
         }
-
-        // return root
-        //     ? {
-        //           root,
-        //           modalizer,
-        //           groupper,
-        //           mover,
-        //           groupperBeforeMover,
-        //           modalizerInGroupper,
-        //           rtl: checkRtl ? !!dirRightToLeft : undefined,
-        //           uncontrolled,
-        //           excludedFromMover,
-        //           ignoreKeydown: shouldIgnoreKeydown,
-        //       }
-        //     : undefined;
     }
 }

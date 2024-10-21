@@ -1,28 +1,30 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::{
     dom_api::DOM,
     focusable::FocusableAPI,
-    root::WindowWithTabsterInstance,
+    root::{RootAPI, WindowWithTabsterInstance},
     types::{self, TabsterCoreProps, DOMAPI},
 };
 use web_sys::{js_sys::WeakMap, HtmlElement, Node, Window};
 
 pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
     let tabster = TabsterCore::new(win, props);
-
-    tabster.create_tabster()
+    Tabster::new(tabster)
 }
 
 pub struct Tabster {
     pub focusable: FocusableAPI,
+    pub root: RootAPI,
 }
 
 impl Tabster {
     fn new(tabster: TabsterCore) -> Tabster {
-        let focusable = FocusableAPI::new(tabster);
+        let tabster = Arc::new(RefCell::new(tabster));
+        let focusable = FocusableAPI::new(tabster.clone());
+        let root = RootAPI::new(tabster);
 
-        Self { focusable }
+        Self { focusable, root }
     }
 }
 
@@ -85,10 +87,6 @@ impl TabsterCore {
             modalizer: None,
             init_queue: Vec::new(),
         }
-    }
-
-    fn create_tabster(self) -> Tabster {
-        Tabster::new(self)
     }
 
     pub fn drain_init_queue(&mut self) {

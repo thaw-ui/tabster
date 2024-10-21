@@ -68,7 +68,6 @@ pub fn get_last_child(container: HtmlElement) -> Option<HtmlElement> {
 static TABSTER_INSTANCE_CONTEXT: OnceLock<RwLock<HashMap<String, Arc<InstanceContext>>>> =
     OnceLock::new();
 
-
 // struct InternalBasics {
 
 // }
