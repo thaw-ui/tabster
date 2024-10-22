@@ -1,9 +1,15 @@
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use web_sys::{
-    Document, Element, HtmlElement, KeyboardEvent, Node, NodeFilter, TreeWalker, Window,
+    js_sys::Function,
+    wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
+    Document, Element, HtmlElement, KeyboardEvent, MutationObserver, MutationRecord, Node,
+    NodeFilter, TreeWalker, Window,
 };
 
-use crate::{groupper::Groupper, modalizer::Modalizer, mover::Mover};
+use crate::{
+    groupper::Groupper, modalizer::Modalizer, mover::Mover, mutation_event::observe_mutations,
+};
 
 #[derive(Debug, Default)]
 pub struct IgnoreKeydown {
@@ -206,6 +212,10 @@ pub struct TabsterCoreProps {
 pub type ParentNode = Node;
 
 pub trait DOMAPI {
+    fn create_mutation_observer(
+        callback: impl Fn(Vec<MutationRecord>, MutationObserver) + 'static,
+    ) -> MutationObserver;
+
     fn create_tree_walker(
         doc: Document,
         root: &Node,
@@ -239,8 +249,14 @@ pub struct FocusableAcceptElementState {
     pub skipped_focusable: Option<bool>,
 }
 
+pub struct  TabsterAttributeOnElement {
+    pub string: String,
+    pub object: TabsterAttributeProps
+}
+
+#[derive(Default)]
 pub struct TabsterOnElement {
-    pub mover: Mover,
+    pub mover: Option<Mover>,
     pub groupper: Option<Groupper>,
     pub modalizer: Option<Modalizer>,
     pub focusable: Option<FocusableProps>,
@@ -248,13 +264,14 @@ pub struct TabsterOnElement {
 }
 
 pub struct TabsterElementStorageEntry {
-    pub tabster: Option<Arc<TabsterOnElement>>, // attr?: TabsterAttributeOnElement;
+    pub tabster: Option<Arc<TabsterOnElement>>,
+    pub attr: Option<TabsterAttributeOnElement>,
                                                 // aug?: TabsterAugmentedAttributes;
 }
 
 impl TabsterElementStorageEntry {
     pub fn new() -> Self {
-        Self { tabster: None }
+        Self { tabster: None, attr: None }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -268,7 +285,48 @@ impl TabsterElementStorageEntry {
 
 pub type TabsterElementStorage = TabsterElementStorageEntry;
 
-pub struct TabsterAttributeProps {}
+pub struct InternalAPI {
+    unobserve: Option<Box<dyn Fn()>>,
+    doc: Document,
+}
+
+impl InternalAPI {
+    pub fn new(win: Window) -> Self {
+        Self {
+            unobserve: None,
+            doc: win.document().unwrap_throw(),
+        }
+    }
+    pub fn stop_observer(&mut self) {
+        if let Some(unobserve) = self.unobserve.take() {
+            unobserve();
+        }
+    }
+
+    pub fn resume_observer(&mut self, sync_state: bool) {
+        self.unobserve = Some(observe_mutations(&self.doc));
+    }
+}
+
+/// 0 | 1 | 2
+pub type GroupperTabbability = u8;
+
+#[derive(Serialize, Deserialize)]
+pub struct GroupperProps {
+    tabbability: Option<GroupperTabbability>,
+    delegated: Option<bool>
+    // This allows to tweak the groupper behaviour for the cases when
+    // the groupper container is not focusable and groupper has Limited or LimitedTrapFocus
+    // tabbability. By default, the groupper will automatically become active once the focus
+    // goes to first focusable element inside the groupper during tabbing. When true, the
+    // groupper will become active only after Enter is pressed on first focusable element
+    // inside the groupper.
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TabsterAttributeProps {
+    pub groupper: Option<GroupperProps>,
+}
 
 impl TabsterAttributeProps {
     pub fn json_string(self) -> String {

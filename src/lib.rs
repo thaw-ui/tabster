@@ -6,6 +6,7 @@ mod groupper;
 mod instance;
 mod modalizer;
 mod mover;
+mod mutation_event;
 mod root;
 mod tabster;
 pub mod types;

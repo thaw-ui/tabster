@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::{
     dom_api::DOM,
@@ -6,7 +6,11 @@ use crate::{
     root::{RootAPI, WindowWithTabsterInstance},
     types::{self, TabsterCoreProps, DOMAPI},
 };
-use web_sys::{js_sys::WeakMap, HtmlElement, Node, Window};
+use web_sys::{
+    js_sys::WeakMap,
+    wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
+    HtmlElement, Node, Window,
+};
 
 pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
     let tabster = TabsterCore::new(win, props);
@@ -31,7 +35,7 @@ impl Tabster {
 // TODO Memory leak
 struct TabsterCoreStorage {
     storage: web_sys::js_sys::WeakMap,
-    data: HashMap<String, Arc<types::TabsterElementStorage>>,
+    data: HashMap<String, Arc<RefCell<types::TabsterElementStorage>>>,
 }
 
 impl TabsterCoreStorage {
@@ -45,12 +49,12 @@ impl TabsterCoreStorage {
         let value = self.storage.get(el);
         value.as_string()
     }
-    fn get(&self, el: &HtmlElement) -> Option<Arc<types::TabsterElementStorage>> {
+    fn get(&self, el: &HtmlElement) -> Option<Arc<RefCell<types::TabsterElementStorage>>> {
         let value = self.get_storage_value(el)?;
         self.data.get(&value).cloned()
     }
 
-    fn set(&mut self, el: &HtmlElement, value: Arc<types::TabsterElementStorage>) {
+    fn set(&mut self, el: &HtmlElement, value: Arc<RefCell<types::TabsterElementStorage>>) {
         let uuid = uuid::Uuid::new_v4().to_string();
         self.storage
             .set(el, &web_sys::wasm_bindgen::JsValue::from_str(&uuid));
@@ -68,7 +72,12 @@ impl TabsterCoreStorage {
 pub struct TabsterCore {
     storage: TabsterCoreStorage,
     win: Option<WindowWithTabsterInstance>,
-    init_queue: Vec<Box<dyn FnOnce()>>,
+    init_queue: Arc<RefCell<Vec<Box<dyn FnOnce()>>>>,
+    init_timer: Arc<RefCell<Option<i32>>>,
+    pub(crate) noop: bool,
+
+    // CoreAPIs
+    internal: Arc<RefCell<types::InternalAPI>>,
 
     // Extended APIs
     pub modalizer: Option<types::ModalizerAPI>,
@@ -80,13 +89,64 @@ impl TabsterCore {
         let get_parent = props
             .get_parent
             .unwrap_or_else(|| Box::new(move |node| DOM::get_parent_node(Some(node))));
-        Self {
+        let internal = Arc::new(RefCell::new(types::InternalAPI::new(win.clone())));
+        let mut this = Self {
             storage: TabsterCoreStorage::new(),
             get_parent,
             win: Some(win),
+            noop: false,
+            internal: internal.clone(),
             modalizer: None,
-            init_queue: Vec::new(),
+            init_queue: Default::default(),
+            init_timer: Default::default(),
+        };
+
+        this.queue_init(move || {
+            let mut internal = internal.try_borrow_mut().unwrap_throw();
+            internal.resume_observer(true);
+        });
+
+        this
+    }
+
+    fn queue_init(&mut self, callback: impl FnOnce() + 'static) {
+        let Some(win) = self.win.as_ref() else {
+            return;
+        };
+
+        {
+            let mut init_queue = self.init_queue.try_borrow_mut().unwrap_throw();
+            init_queue.push(Box::new(callback));
         }
+
+        let init_timer_is_none = {
+            let init_timer = self.init_timer.borrow();
+            init_timer.is_none()
+        };
+
+        if init_timer_is_none {
+            let init_timer = self.init_timer.clone();
+            let drain_init_queue_fn = self.drain_init_queue_fn();
+            let cb = Box::new(move || {
+                let mut init_timer = init_timer.try_borrow_mut().unwrap_throw();
+                *init_timer = None;
+                drain_init_queue_fn();
+            }) as Box<dyn Fn() + 'static>;
+            let cb = Closure::wrap(cb);
+            win.set_interval_with_callback_and_timeout_and_arguments_0(
+                cb.as_ref().unchecked_ref(),
+                0,
+            ).unwrap_throw();
+        }
+    }
+
+    fn drain_init_queue_fn(&self) -> Box<dyn Fn()> {
+        let init_queue = self.init_queue.clone();
+        Box::new(move || {
+            let mut init_queue = init_queue.try_borrow_mut().unwrap_throw();
+            let queue = init_queue.drain(..);
+            queue.into_iter().for_each(|callback| callback());
+        })
     }
 
     pub fn drain_init_queue(&mut self) {
@@ -94,8 +154,9 @@ impl TabsterCore {
             return;
         }
 
+        let mut init_queue = self.init_queue.try_borrow_mut().unwrap_throw();
         // Resetting the queue before calling the callbacks to avoid recursion.
-        let queue = self.init_queue.drain(..);
+        let queue = init_queue.drain(..);
         queue.into_iter().for_each(|callback| callback());
     }
 
@@ -103,14 +164,15 @@ impl TabsterCore {
         &mut self,
         element: &HtmlElement,
         addremove: Option<bool>,
-    ) -> Option<Arc<types::TabsterElementStorageEntry>> {
+    ) -> Option<Arc<RefCell<types::TabsterElementStorageEntry>>> {
         let mut entry = self.storage.get(element);
         if let Some(entry) = entry.as_ref() {
+            let entry = entry.borrow();
             if matches!(addremove, Some(false)) && entry.is_empty() {
                 self.storage.delete(element);
             }
         } else if matches!(addremove, Some(true)) {
-            entry = Some(Arc::new(types::TabsterElementStorageEntry::new()));
+            entry = Some(Arc::new(RefCell::new(types::TabsterElementStorageEntry::new())));
             self.storage.set(element, entry.clone().unwrap());
         }
 

@@ -1,12 +1,20 @@
 use crate::types;
 use web_sys::{
-    wasm_bindgen::{JsCast, UnwrapThrowExt},
-    Document, Element, Node, NodeFilter, TreeWalker,
+    wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
+    Document, Element, MutationObserver, MutationRecord, Node, NodeFilter, TreeWalker,
 };
 
 pub struct DOM;
 
 impl types::DOMAPI for DOM {
+    fn create_mutation_observer(
+        callback: impl Fn(Vec<MutationRecord>, MutationObserver) + 'static,
+    ) -> MutationObserver {
+        let cb = Box::new(callback) as Box<dyn Fn(Vec<MutationRecord>, MutationObserver)>;
+        let cb = Closure::wrap(cb);
+        MutationObserver::new(cb.as_ref().unchecked_ref()).unwrap_throw()
+    }
+
     fn create_tree_walker(
         doc: Document,
         root: &Node,
