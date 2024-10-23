@@ -23,7 +23,7 @@ pub struct DummyInputManager {
 
 impl DummyInputManager {
     pub fn new(tabster: Arc<RefCell<TabsterCore>>, element: HtmlElement) -> Self {
-        let instance = DummyInputManagerCore::new(tabster);
+        let instance = DummyInputManagerCore::new(tabster, element.clone());
         Self {
             instance: Some(instance),
             element,
@@ -34,12 +34,13 @@ impl DummyInputManager {
 struct DummyInputManagerCore {
     add_timer: Arc<RefCell<Option<i32>>>,
     get_window: Arc<GetWindow>,
+    element: Option<HtmlElement>,
     first_dummy: Option<DummyInput>,
     last_dummy: Option<DummyInput>,
 }
 
 impl DummyInputManagerCore {
-    fn new(tabster: Arc<RefCell<TabsterCore>>) -> Self {
+    fn new(tabster: Arc<RefCell<TabsterCore>>, element: HtmlElement) -> Self {
         let tabster = tabster.borrow();
         let get_window = &tabster.get_window;
         let first_dummy = DummyInput::new(get_window.clone());
@@ -47,6 +48,7 @@ impl DummyInputManagerCore {
         let mut this = Self {
             add_timer: Default::default(),
             get_window: get_window.clone(),
+            element: Some(element),
             first_dummy: Some(first_dummy),
             last_dummy: Some(last_dummy),
         };
@@ -59,14 +61,17 @@ impl DummyInputManagerCore {
     /// Adds dummy inputs as the first and last child of the given element
     /// Called each time the children under the element is mutated
     fn add_dummy_inputs(&mut self) {
-        // if self.add_timer.is_some() {
-        //     return;
-        // }
+        let add_timer = self.add_timer.clone();
+        let mut add_timer_ref = self.add_timer.borrow_mut();
+        if add_timer_ref.is_some() {
+            return;
+        }
 
         let timer = set_timeout(
             &(self.get_window)(),
             move || {
-                // delete this._addTimer;
+                let mut add_timer = add_timer.borrow_mut();
+                *add_timer = None;
 
                 // this._ensurePosition();
 
@@ -81,8 +86,11 @@ impl DummyInputManagerCore {
             },
             0,
         );
+        *add_timer_ref = Some(timer);
+    }
 
-        // self.add_timer = Some(add_timer);
+    fn ensure_position(&self) {
+        
     }
 }
 
