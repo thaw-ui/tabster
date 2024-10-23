@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+use std::{cell::RefCell, sync::Arc};
 use web_sys::{
     js_sys::Function,
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
@@ -204,6 +204,9 @@ pub struct TabsterProps {
 
 pub struct TabsterCoreProps {
     pub auto_root: Option<RootProps>,
+    /// Allows all tab key presses under the tabster root to be controlled by tabster
+    /// @default true
+    pub control_tab: Option<bool>,
     /// Custom getter for parent elements. Defaults to the default .parentElement call
     /// Currently only used to detect tabster contexts
     pub get_parent: Option<Box<dyn Fn(Node) -> Option<Node>>>,
@@ -249,9 +252,9 @@ pub struct FocusableAcceptElementState {
     pub skipped_focusable: Option<bool>,
 }
 
-pub struct  TabsterAttributeOnElement {
+pub struct TabsterAttributeOnElement {
     pub string: String,
-    pub object: TabsterAttributeProps
+    pub object: Arc<TabsterAttributeProps>,
 }
 
 #[derive(Default)]
@@ -263,23 +266,32 @@ pub struct TabsterOnElement {
     pub uncontrolled: Option<UncontrolledProps>,
 }
 
+impl TabsterOnElement {
+    pub fn is_empty(&self) -> bool {
+        self.mover.is_none()
+            && self.groupper.is_none()
+            && self.modalizer.is_none()
+            && self.focusable.is_none()
+            && self.uncontrolled.is_none()
+    }
+}
+
 pub struct TabsterElementStorageEntry {
-    pub tabster: Option<Arc<TabsterOnElement>>,
+    pub tabster: Option<Arc<RefCell<TabsterOnElement>>>,
     pub attr: Option<TabsterAttributeOnElement>,
-                                                // aug?: TabsterAugmentedAttributes;
+    // aug?: TabsterAugmentedAttributes;
 }
 
 impl TabsterElementStorageEntry {
     pub fn new() -> Self {
-        Self { tabster: None, attr: None }
+        Self {
+            tabster: None,
+            attr: None,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        if self.tabster.is_some() {
-            true
-        } else {
-            false
-        }
+        self.tabster.is_none() && self.attr.is_none()
     }
 }
 
@@ -311,19 +323,18 @@ impl InternalAPI {
 /// 0 | 1 | 2
 pub type GroupperTabbability = u8;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct GroupperProps {
     tabbability: Option<GroupperTabbability>,
-    delegated: Option<bool>
-    // This allows to tweak the groupper behaviour for the cases when
-    // the groupper container is not focusable and groupper has Limited or LimitedTrapFocus
-    // tabbability. By default, the groupper will automatically become active once the focus
-    // goes to first focusable element inside the groupper during tabbing. When true, the
-    // groupper will become active only after Enter is pressed on first focusable element
-    // inside the groupper.
+    delegated: Option<bool>, // This allows to tweak the groupper behaviour for the cases when
+                             // the groupper container is not focusable and groupper has Limited or LimitedTrapFocus
+                             // tabbability. By default, the groupper will automatically become active once the focus
+                             // goes to first focusable element inside the groupper during tabbing. When true, the
+                             // groupper will become active only after Enter is pressed on first focusable element
+                             // inside the groupper.
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct TabsterAttributeProps {
     pub groupper: Option<GroupperProps>,
 }

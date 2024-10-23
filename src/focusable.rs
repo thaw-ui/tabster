@@ -86,7 +86,7 @@ impl FocusableAPI {
             let Some(tabster_on_element) = tabster_on_element else {
                 return false;
             };
-
+            let tabster_on_element = tabster_on_element.borrow();
             let Some(focusable) = tabster_on_element.focusable.as_ref() else {
                 return false;
             };

@@ -1,5 +1,7 @@
 use crate::{consts::TABSTER_ATTRIBUTE_NAME, dom_api::DOM, types::DOMAPI};
-use web_sys::{js_sys::Set, wasm_bindgen::UnwrapThrowExt, Document, MutationObserverInit, MutationRecord};
+use web_sys::{
+    js_sys::Set, wasm_bindgen::UnwrapThrowExt, Document, MutationObserverInit, MutationRecord,
+};
 
 pub fn observe_mutations(doc: &Document) -> Box<dyn Fn()> {
     let on_mutation = move |mutations: Vec<MutationRecord>, _| {
@@ -25,7 +27,6 @@ pub fn observe_mutations(doc: &Document) -> Box<dyn Fn()> {
                     }
                 }
             } else {
-
             }
         }
 

@@ -106,6 +106,7 @@ impl RootAPI {
                 .unwrap_throw()
                 .tag_name();
 
+            let tabster_on_element = tabster_on_element.borrow();
             if tabster_on_element.uncontrolled.is_some()
                 || tag_name == "IFRAME"
                 || tag_name == "WEBVIEW"

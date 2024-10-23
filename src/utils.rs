@@ -1,8 +1,11 @@
 use crate::{
+    consts::TABSTER_DUMMY_INPUT_ATTRIBUTE_NAME,
     dom_api::DOM,
+    tabster::TabsterCore,
     types::{GetWindow, DOMAPI},
 };
 use std::{
+    cell::RefCell,
     collections::HashMap,
     ops::Deref,
     sync::{Arc, OnceLock, RwLock},
@@ -11,6 +14,136 @@ use web_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
     Document, HtmlElement, Node, NodeFilter, TreeWalker,
 };
+
+pub struct DummyInputManager {
+    instance: Option<DummyInputManagerCore>,
+    element: HtmlElement,
+}
+
+impl DummyInputManager {
+    pub fn new(tabster: Arc<RefCell<TabsterCore>>, element: HtmlElement) -> Self {
+        let instance = DummyInputManagerCore::new(tabster);
+        Self {
+            instance: Some(instance),
+            element,
+        }
+    }
+}
+
+struct DummyInputManagerCore {
+    add_timer: Arc<RefCell<Option<i32>>>,
+    get_window: Arc<GetWindow>,
+    first_dummy: Option<DummyInput>,
+    last_dummy: Option<DummyInput>,
+}
+
+impl DummyInputManagerCore {
+    fn new(tabster: Arc<RefCell<TabsterCore>>) -> Self {
+        let tabster = tabster.borrow();
+        let get_window = &tabster.get_window;
+        let first_dummy = DummyInput::new(get_window.clone());
+        let last_dummy = DummyInput::new(get_window.clone());
+        let mut this = Self {
+            add_timer: Default::default(),
+            get_window: get_window.clone(),
+            first_dummy: Some(first_dummy),
+            last_dummy: Some(last_dummy),
+        };
+
+        this.add_dummy_inputs();
+
+        this
+    }
+
+    /// Adds dummy inputs as the first and last child of the given element
+    /// Called each time the children under the element is mutated
+    fn add_dummy_inputs(&mut self) {
+        // if self.add_timer.is_some() {
+        //     return;
+        // }
+
+        let cb = Box::new(move || {
+            // delete this._addTimer;
+
+            // this._ensurePosition();
+
+            // if (__DEV__) {
+            //     this._firstDummy &&
+            //         setDummyInputDebugValue(this._firstDummy, this._wrappers);
+            //     this._lastDummy &&
+            //         setDummyInputDebugValue(this._lastDummy, this._wrappers);
+            // }
+
+            // this._addTransformOffsets();
+        }) as Box<dyn Fn() + 'static>;
+        let cb = Closure::wrap(cb);
+        let add_timer = (self.get_window)().set_interval_with_callback_and_timeout_and_arguments_0(
+            cb.as_ref().unchecked_ref(),
+            0,
+        )
+        .unwrap_throw();
+
+        // self.add_timer = Some(add_timer);
+    }
+}
+
+struct DummyInput {
+    input: Option<HtmlElement>,
+}
+
+impl DummyInput {
+    fn new(get_window: Arc<GetWindow>) -> Self {
+        let win = get_window();
+        let input: HtmlElement = win
+            .document()
+            .unwrap_throw()
+            .create_element("i")
+            .unwrap_throw()
+            .dyn_into()
+            .unwrap_throw();
+
+        input.set_tab_index(0);
+        input.set_attribute("role", "none").unwrap_throw();
+
+        input
+            .set_attribute(TABSTER_DUMMY_INPUT_ATTRIBUTE_NAME, "")
+            .unwrap_throw();
+        input.set_attribute("aria-hidden", "true").unwrap_throw();
+        input.set_attribute("style", "position:fixed;width:1px;height:1px;opacity:0.001;z-index:-1;content-visibility:hidden").unwrap_throw();
+
+        // makeFocusIgnored(input);
+
+        // this.input = input;
+        // this.isFirst = props.isFirst;
+        // this.isOutside = isOutside;
+        // this._isPhantom = props.isPhantom ?? false;
+        // this._fixedTarget = fixedTarget;
+
+        // input.addEventListener("focusin", this._focusIn);
+        // input.addEventListener("focusout", this._focusOut);
+
+        // (input as HTMLElementWithDummyContainer).__tabsterDummyContainer =
+        //     element;
+
+        // if (this._isPhantom) {
+        //     this._disposeTimer = win.setTimeout(() => {
+        //         delete this._disposeTimer;
+        //         this.dispose();
+        //     }, 0);
+
+        //     this._clearDisposeTimeout = () => {
+        //         if (this._disposeTimer) {
+        //             win.clearTimeout(this._disposeTimer);
+        //             delete this._disposeTimer;
+        //         }
+
+        //         delete this._clearDisposeTimeout;
+        //     };
+        // }
+
+        Self { input: Some(input) }
+    }
+}
 
 pub fn create_element_tree_walker(
     doc: Document,

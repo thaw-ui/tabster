@@ -14,4 +14,4 @@ mod utils;
 
 pub use attribute_helpers::*;
 pub use focusable::FocusableAPI;
-pub use tabster::{create_tabster, Tabster};
+pub use tabster::{create_tabster, get_groupper, Tabster};
