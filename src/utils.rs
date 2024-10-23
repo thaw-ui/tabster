@@ -17,7 +17,7 @@ use web_sys::{
 };
 
 pub struct DummyInputManager {
-    instance: Option<DummyInputManagerCore>,
+    instance: Option<Arc<RefCell<DummyInputManagerCore>>>,
     element: HtmlElement,
 }
 
@@ -40,40 +40,43 @@ struct DummyInputManagerCore {
 }
 
 impl DummyInputManagerCore {
-    fn new(tabster: Arc<RefCell<TabsterCore>>, element: HtmlElement) -> Self {
+    fn new(tabster: Arc<RefCell<TabsterCore>>, element: HtmlElement) -> Arc<RefCell<Self>> {
         let tabster = tabster.borrow();
         let get_window = &tabster.get_window;
         let first_dummy = DummyInput::new(get_window.clone());
         let last_dummy = DummyInput::new(get_window.clone());
-        let mut this = Self {
+        let this = Arc::new(RefCell::new(Self {
             add_timer: Default::default(),
             get_window: get_window.clone(),
             element: Some(element),
             first_dummy: Some(first_dummy),
             last_dummy: Some(last_dummy),
-        };
+        }));
 
-        this.add_dummy_inputs();
+        Self::add_dummy_inputs(this.clone());
 
         this
     }
 
     /// Adds dummy inputs as the first and last child of the given element
     /// Called each time the children under the element is mutated
-    fn add_dummy_inputs(&mut self) {
-        let add_timer = self.add_timer.clone();
-        let mut add_timer_ref = self.add_timer.borrow_mut();
+    fn add_dummy_inputs(this: Arc<RefCell<DummyInputManagerCore>>) {
+        let this_ = this.clone();
+        let this = this.borrow();
+        let add_timer = this.add_timer.clone();
+        let mut add_timer_ref = this.add_timer.borrow_mut();
         if add_timer_ref.is_some() {
             return;
         }
 
         let timer = set_timeout(
-            &(self.get_window)(),
+            &(this.get_window)(),
             move || {
                 let mut add_timer = add_timer.borrow_mut();
                 *add_timer = None;
 
-                // this._ensurePosition();
+                let this = this_.borrow();
+                this.ensure_position();
 
                 // if (__DEV__) {
                 //     this._firstDummy &&
@@ -90,7 +93,30 @@ impl DummyInputManagerCore {
     }
 
     fn ensure_position(&self) {
-        
+        let element = self.element.clone();
+        let last_dummy_input = if let Some(last_dummy) = &self.last_dummy {
+            last_dummy.input.clone()
+        } else {
+            None
+        };
+
+        let Some(element) = element else {
+            return;
+        };
+        let Some(last_dummy_input) = last_dummy_input else {
+            return;
+        };
+        // if (this._isOutside) {
+        // }
+
+        if DOM::get_last_element_child(Some(element.clone().dyn_into().unwrap_throw()))
+            != Some(last_dummy_input.clone().dyn_into().unwrap_throw())
+        {
+            DOM::append_child(
+                element.clone().dyn_into().unwrap_throw(),
+                last_dummy_input.clone().dyn_into().unwrap_throw(),
+            );
+        }
     }
 }
 

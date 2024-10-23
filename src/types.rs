@@ -232,7 +232,11 @@ pub trait DOMAPI {
 
     fn node_contains(parent: Option<Node>, child: Option<Node>) -> bool;
 
+    fn get_first_element_child(element: Option<Element>)-> Option<Element>;
+
     fn get_last_element_child(element: Option<Element>) -> Option<Element>;
+
+    fn append_child(parent: Node, child: Node) -> Node;
 }
 
 pub type GetWindow = Box<dyn Fn() -> Window>;

@@ -43,10 +43,18 @@ impl types::DOMAPI for DOM {
         parent.contains(child.as_ref())
     }
 
+    fn get_first_element_child(element: Option<Element>)-> Option<Element> {
+        
+    }
+
     fn get_last_element_child(element: Option<Element>) -> Option<Element> {
         let Some(element) = element else {
             return None;
         };
         element.last_element_child()
+    }
+
+    fn append_child(parent: Node, child: Node) -> Node {
+        parent.append_child(&child).unwrap_throw()
     }
 }
