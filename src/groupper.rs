@@ -1,6 +1,6 @@
 use crate::{
     tabster::{self, TabsterCore},
-    types::GetWindow,
+    types::{self, GetWindow},
     utils::DummyInputManager,
 };
 use std::{
@@ -12,8 +12,13 @@ use web_sys::{wasm_bindgen::UnwrapThrowExt, HtmlElement};
 struct GroupperDummyManager(DummyInputManager);
 
 impl GroupperDummyManager {
-    fn new(element: HtmlElement, groupper: &Groupper, tabster: Arc<RefCell<TabsterCore>>) -> Self {
-        Self(DummyInputManager::new(tabster, element))
+    fn new(
+        element: HtmlElement,
+        groupper: &Groupper,
+        tabster: Arc<RefCell<TabsterCore>>,
+        sys: Option<types::SysProps>,
+    ) -> Self {
+        Self(DummyInputManager::new(tabster, element, sys))
     }
 }
 
@@ -25,7 +30,11 @@ pub struct Groupper {
 }
 
 impl Groupper {
-    pub fn new(tabster: Arc<RefCell<TabsterCore>>, element: &HtmlElement) -> Self {
+    pub fn new(
+        tabster: Arc<RefCell<TabsterCore>>,
+        element: &HtmlElement,
+        sys: Option<types::SysProps>,
+    ) -> Self {
         let last_tabster_part_id = LAST_TABSTER_PART_ID.get_or_init(Default::default);
         let id = *last_tabster_part_id.read().unwrap_throw() + 1;
         *last_tabster_part_id.write().unwrap_throw() = id;
@@ -47,7 +56,12 @@ impl Groupper {
             //         tabster,
             //         sys
             //     );
-            Some(GroupperDummyManager::new(element.clone(), &this, tabster))
+            Some(GroupperDummyManager::new(
+                element.clone(),
+                &this,
+                tabster,
+                sys,
+            ))
         } else {
             None
         };
@@ -71,13 +85,13 @@ impl GroupperAPI {
         }
     }
 
-    pub fn create_groupper(&self, element: &HtmlElement) -> Groupper {
+    pub fn create_groupper(&self, element: &HtmlElement, sys: Option<types::SysProps>) -> Groupper {
         let new_groupper = Groupper::new(
             self.tabster.clone(),
             element,
             // this._onGroupperDispose,
             // props,
-            // sys
+            sys,
         );
 
         // this._grouppers[new_groupper.id] = new_groupper;

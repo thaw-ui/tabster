@@ -89,6 +89,19 @@ pub struct TabsterContext {
 
 pub struct Root {}
 
+pub type SysDummyInputsPosition = u8;
+
+#[derive(Serialize, Deserialize, Default, Clone)]
+pub struct SysProps {
+    /// Force dummy input position outside or inside of the element.
+    /// By default (when undefined), the position is determined dynamically
+    /// (for example inside for <li> elements and outside for <table> elements,
+    /// plus a default Groupper/Mover/Modalizer implementation position).
+    /// Setting to true will force the dummy inputs to be always outside of the element,
+    /// setting to false will force the dummy inputs to be always inside.
+    dummy_inputs_position: Option<SysDummyInputsPosition>,
+}
+
 pub struct ModalizerAPI {
     pub is_augmented: Box<dyn Fn(HtmlElement) -> bool>,
 }
@@ -232,11 +245,13 @@ pub trait DOMAPI {
 
     fn node_contains(parent: Option<Node>, child: Option<Node>) -> bool;
 
-    fn get_first_element_child(element: Option<Element>)-> Option<Element>;
+    fn get_first_element_child(element: Option<Element>) -> Option<Element>;
 
     fn get_last_element_child(element: Option<Element>) -> Option<Element>;
 
     fn append_child(parent: Node, child: Node) -> Node;
+
+    fn insert_before(parent: Node, child: Node, reference_child: Option<Node>) -> Node;
 }
 
 pub type GetWindow = Box<dyn Fn() -> Window>;
@@ -341,6 +356,7 @@ pub struct GroupperProps {
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct TabsterAttributeProps {
     pub groupper: Option<GroupperProps>,
+    pub sys: Option<SysProps>,
 }
 
 impl TabsterAttributeProps {

@@ -43,8 +43,12 @@ impl types::DOMAPI for DOM {
         parent.contains(child.as_ref())
     }
 
-    fn get_first_element_child(element: Option<Element>)-> Option<Element> {
-        
+    fn get_first_element_child(element: Option<Element>) -> Option<Element> {
+        if let Some(element) = element {
+            element.first_element_child()
+        } else {
+            None
+        }
     }
 
     fn get_last_element_child(element: Option<Element>) -> Option<Element> {
@@ -56,5 +60,11 @@ impl types::DOMAPI for DOM {
 
     fn append_child(parent: Node, child: Node) -> Node {
         parent.append_child(&child).unwrap_throw()
+    }
+
+    fn insert_before(parent: Node, child: Node, reference_child: Option<Node>) -> Node {
+        parent
+            .insert_before(&child, reference_child.as_ref())
+            .unwrap_throw()
     }
 }

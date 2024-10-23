@@ -214,7 +214,7 @@ impl FocusableAPI {
         let accept_element_state = FocusableAcceptElementState {
             accept_condition,
             container: container.clone(),
-            from: current_element.unwrap_or_else(|| container.clone()),
+            from: current_element.clone().unwrap_or_else(|| container.clone()),
             from_ctx: None,
             found: None,
             found_element: None,
@@ -288,7 +288,17 @@ impl FocusableAPI {
             }
         };
 
-        if matches!(is_backward, Some(true)) {
+        if current_element.is_none() {
+            out.out_of_dom_order = Some(true);
+        }
+        if current_element.is_some()
+            && DOM::node_contains(
+                Some(container.clone().into()),
+                current_element.clone().map(|el| el.into()),
+            )
+        {
+            walker.set_current_node(&current_element.clone().unwrap().into());
+        } else if matches!(is_backward, Some(true)) {
             let Some(last_child) = get_last_child(container) else {
                 return None;
             };

@@ -2,7 +2,7 @@ use crate::{
     consts::TABSTER_DUMMY_INPUT_ATTRIBUTE_NAME,
     dom_api::DOM,
     tabster::TabsterCore,
-    types::{GetWindow, DOMAPI},
+    types::{self, GetWindow, DOMAPI},
     web::set_timeout,
 };
 use std::{
@@ -22,8 +22,12 @@ pub struct DummyInputManager {
 }
 
 impl DummyInputManager {
-    pub fn new(tabster: Arc<RefCell<TabsterCore>>, element: HtmlElement) -> Self {
-        let instance = DummyInputManagerCore::new(tabster, element.clone());
+    pub fn new(
+        tabster: Arc<RefCell<TabsterCore>>,
+        element: HtmlElement,
+        sys: Option<types::SysProps>,
+    ) -> Self {
+        let instance = DummyInputManagerCore::new(tabster, element.clone(), sys);
         Self {
             instance: Some(instance),
             element,
@@ -35,20 +39,28 @@ struct DummyInputManagerCore {
     add_timer: Arc<RefCell<Option<i32>>>,
     get_window: Arc<GetWindow>,
     element: Option<HtmlElement>,
+    is_outside: bool,
     first_dummy: Option<DummyInput>,
     last_dummy: Option<DummyInput>,
 }
 
 impl DummyInputManagerCore {
-    fn new(tabster: Arc<RefCell<TabsterCore>>, element: HtmlElement) -> Arc<RefCell<Self>> {
+    fn new(
+        tabster: Arc<RefCell<TabsterCore>>,
+        element: HtmlElement,
+        sys: Option<types::SysProps>,
+    ) -> Arc<RefCell<Self>> {
         let tabster = tabster.borrow();
         let get_window = &tabster.get_window;
         let first_dummy = DummyInput::new(get_window.clone());
         let last_dummy = DummyInput::new(get_window.clone());
+        let tag_name = element.tag_name();
+
         let this = Arc::new(RefCell::new(Self {
             add_timer: Default::default(),
             get_window: get_window.clone(),
             element: Some(element),
+            is_outside: false,
             first_dummy: Some(first_dummy),
             last_dummy: Some(last_dummy),
         }));
@@ -94,6 +106,11 @@ impl DummyInputManagerCore {
 
     fn ensure_position(&self) {
         let element = self.element.clone();
+        let first_dummy_input = if let Some(first_dummy) = &self.first_dummy {
+            first_dummy.input.clone()
+        } else {
+            None
+        };
         let last_dummy_input = if let Some(last_dummy) = &self.last_dummy {
             last_dummy.input.clone()
         } else {
@@ -101,6 +118,9 @@ impl DummyInputManagerCore {
         };
 
         let Some(element) = element else {
+            return;
+        };
+        let Some(first_dummy_input) = first_dummy_input else {
             return;
         };
         let Some(last_dummy_input) = last_dummy_input else {
@@ -112,10 +132,19 @@ impl DummyInputManagerCore {
         if DOM::get_last_element_child(Some(element.clone().dyn_into().unwrap_throw()))
             != Some(last_dummy_input.clone().dyn_into().unwrap_throw())
         {
-            DOM::append_child(
-                element.clone().dyn_into().unwrap_throw(),
-                last_dummy_input.clone().dyn_into().unwrap_throw(),
-            );
+            DOM::append_child(element.clone().into(), last_dummy_input.clone().into());
+        }
+
+        if let Some(first_element_child) = DOM::get_first_element_child(Some(element.into())) {
+            if first_element_child != *first_dummy_input {
+                if let Some(parent_node) = first_element_child.parent_node() {
+                    DOM::insert_before(
+                        parent_node,
+                        first_dummy_input.into(),
+                        Some(first_element_child.into()),
+                    );
+                }
+            }
         }
     }
 }
