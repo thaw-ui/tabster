@@ -11,6 +11,7 @@ mod root;
 mod tabster;
 pub mod types;
 mod utils;
+mod web;
 
 pub use attribute_helpers::*;
 pub use focusable::FocusableAPI;

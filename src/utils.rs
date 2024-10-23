@@ -3,6 +3,7 @@ use crate::{
     dom_api::DOM,
     tabster::TabsterCore,
     types::{GetWindow, DOMAPI},
+    web::set_timeout,
 };
 use std::{
     cell::RefCell,
@@ -62,26 +63,24 @@ impl DummyInputManagerCore {
         //     return;
         // }
 
-        let cb = Box::new(move || {
-            // delete this._addTimer;
+        let timer = set_timeout(
+            &(self.get_window)(),
+            move || {
+                // delete this._addTimer;
 
-            // this._ensurePosition();
+                // this._ensurePosition();
 
-            // if (__DEV__) {
-            //     this._firstDummy &&
-            //         setDummyInputDebugValue(this._firstDummy, this._wrappers);
-            //     this._lastDummy &&
-            //         setDummyInputDebugValue(this._lastDummy, this._wrappers);
-            // }
+                // if (__DEV__) {
+                //     this._firstDummy &&
+                //         setDummyInputDebugValue(this._firstDummy, this._wrappers);
+                //     this._lastDummy &&
+                //         setDummyInputDebugValue(this._lastDummy, this._wrappers);
+                // }
 
-            // this._addTransformOffsets();
-        }) as Box<dyn Fn() + 'static>;
-        let cb = Closure::wrap(cb);
-        let add_timer = (self.get_window)().set_interval_with_callback_and_timeout_and_arguments_0(
-            cb.as_ref().unchecked_ref(),
+                // this._addTransformOffsets();
+            },
             0,
-        )
-        .unwrap_throw();
+        );
 
         // self.add_timer = Some(add_timer);
     }

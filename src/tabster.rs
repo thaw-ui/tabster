@@ -6,6 +6,7 @@ use crate::{
     groupper::GroupperAPI,
     root::{RootAPI, WindowWithTabsterInstance},
     types::{self, GetWindow, TabsterCoreProps, DOMAPI},
+    web::set_timeout,
 };
 use web_sys::{
     js_sys::WeakMap,
@@ -141,20 +142,19 @@ impl TabsterCore {
         };
 
         if init_timer_is_none {
-            // TODO
             let init_timer = self.init_timer.clone();
+            let mut init_timer_ref = self.init_timer.try_borrow_mut().unwrap_throw();
             let drain_init_queue_fn = self.drain_init_queue_fn();
-            let cb = Box::new(move || {
-                let mut init_timer = init_timer.try_borrow_mut().unwrap_throw();
-                *init_timer = None;
-                drain_init_queue_fn();
-            }) as Box<dyn Fn() + 'static>;
-            let cb = Closure::wrap(cb);
-            win.set_interval_with_callback_and_timeout_and_arguments_0(
-                cb.as_ref().unchecked_ref(),
+            let timer = set_timeout(
+                win,
+                move || {
+                    let mut init_timer = init_timer.try_borrow_mut().unwrap_throw();
+                    *init_timer = None;
+                    drain_init_queue_fn();
+                },
                 0,
-            )
-            .unwrap_throw();
+            );
+            *init_timer_ref = Some(timer);
         }
     }
 
