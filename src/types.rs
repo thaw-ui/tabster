@@ -102,6 +102,43 @@ pub struct SysProps {
     dummy_inputs_position: Option<SysDummyInputsPosition>,
 }
 
+/// 0 | 1 | 2 | 4 | 3
+pub type MoverDirection = u8;
+
+/// 0 | 1 | 2
+pub type Visibility = u8;
+
+#[derive(Serialize, Deserialize, Default, Clone)]
+pub struct MoverProps {
+    direction: Option<MoverDirection>,
+    memorize_current: Option<bool>,
+    tabbable: Option<bool>,
+    /// Whether to allow cyclic navigation in the mover
+    /// Can only be applied if navigationType is MoverKeys.Arrows
+    /// @defaultValue false
+    cyclic: Option<bool>,
+    /// In case we need a rich state of the elements inside a Mover,
+    /// we can track it. It takes extra resourses and might affect
+    /// performance when a Mover has many elements inside, so make sure
+    /// you use this prop when it is really needed.
+    track_state: Option<bool>,
+    /// When set to Visibility.Visible or Visibility.PartiallyVisible,
+    /// uses the visibility part of the trackState prop to be able to
+    /// go to first/last visible element (instead of first/last focusable
+    /// element in DOM) when tabbing from outside of the mover.
+    // visibilityAware?: Visibility;
+    /// When true, Mover will try to locate a focusable with Focusable.isDefault
+    /// property as a prioritized element to focus. True by default.
+    has_default: Option<bool>,
+    /// A value between 0 and 1 that specifies the tolerance allowed
+    /// when testing for visibility.
+    /// @example
+    /// an element of height 100px has 10px that are above the viewport
+    /// hidden by scroll. This element is a valid visible element to focus.
+    /// @default 0.8
+    visibility_tolerance: Option<i32>,
+}
+
 pub struct ModalizerAPI {
     pub is_augmented: Box<dyn Fn(HtmlElement) -> bool>,
 }
@@ -357,6 +394,7 @@ pub struct GroupperProps {
 pub struct TabsterAttributeProps {
     pub groupper: Option<GroupperProps>,
     pub sys: Option<SysProps>,
+    pub mover: Option<MoverProps>,
 }
 
 impl TabsterAttributeProps {

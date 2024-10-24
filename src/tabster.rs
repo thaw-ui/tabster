@@ -4,6 +4,7 @@ use crate::{
     dom_api::DOM,
     focusable::FocusableAPI,
     groupper::GroupperAPI,
+    mover::MoverAPI,
     root::{RootAPI, WindowWithTabsterInstance},
     types::{self, GetWindow, TabsterCoreProps, DOMAPI},
     web::set_timeout,
@@ -90,6 +91,7 @@ pub struct TabsterCore {
 
     // Extended APIs
     pub groupper: Option<Arc<GroupperAPI>>,
+    pub mover: Option<MoverAPI>,
     pub modalizer: Option<types::ModalizerAPI>,
     pub get_parent: Box<dyn Fn(Node) -> Option<Node>>,
 }
@@ -113,6 +115,7 @@ impl TabsterCore {
             get_window,
             internal: internal.clone(),
             groupper: None,
+            mover: None,
             modalizer: None,
             init_queue: Default::default(),
             init_timer: Default::default(),

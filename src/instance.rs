@@ -108,6 +108,26 @@ pub fn update_tabster_by_attribute(
             //     );
             // }
         }
+    } else if new_tabster_props.mover.is_some() {
+        let mut tabster_on_element = tabster_on_element.borrow_mut();
+
+        if tabster_on_element.mover.is_some() {
+            // tabsterOnElement.mover.setProps(
+            //     newTabsterProps.mover as Types.MoverProps
+            // );
+        } else {
+            // if (tabster.mover) {
+            //     tabsterOnElement.mover = tabster.mover.createMover(
+            //         element,
+            //         newTabsterProps.mover as Types.MoverProps,
+            //         sys
+            //     );
+            // } else if (__DEV__) {
+            //     console.error(
+            //         "Mover API used before initialization, please call `getMover()`"
+            //     );
+            // }
+        }
     }
 
     if let Some(new_attr) = new_attr {
