@@ -224,7 +224,7 @@ impl FocusableAPI {
         };
         let accept_element_state = Arc::new(RefCell::new(accept_element_state));
         let Some(walker) =
-            create_element_tree_walker(container.owner_document().unwrap_throw(), &container, {
+            create_element_tree_walker(&container.owner_document().unwrap_throw(), &container, {
                 let accept_element_state = accept_element_state.clone();
                 move |node| {
                     Self::accept_element(node.dyn_into().unwrap_throw(), &accept_element_state)

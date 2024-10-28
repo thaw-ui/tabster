@@ -8,7 +8,11 @@ use web_sys::{
 };
 
 use crate::{
-    groupper::Groupper, modalizer::Modalizer, mover::Mover, mutation_event::observe_mutations,
+    groupper::Groupper,
+    modalizer::Modalizer,
+    mover::Mover,
+    mutation_event::observe_mutations,
+    tabster::{self, TabsterCore},
 };
 
 #[derive(Debug, Default)]
@@ -136,7 +140,7 @@ pub struct MoverProps {
     /// an element of height 100px has 10px that are above the viewport
     /// hidden by scroll. This element is a valid visible element to focus.
     /// @default 0.8
-    visibility_tolerance: Option<i32>,
+    pub visibility_tolerance: Option<f32>,
 }
 
 pub struct ModalizerAPI {
@@ -233,6 +237,7 @@ pub struct FindAllProps {
     container: HtmlElement,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RestoreFocusOrder {
     history: u32,
     deloser_default: u32,
@@ -241,6 +246,7 @@ pub struct RestoreFocusOrder {
     root_first: u32,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RootProps {
     restore_focus_order: Option<RestoreFocusOrder>,
 }
@@ -270,7 +276,7 @@ pub trait DOMAPI {
     ) -> MutationObserver;
 
     fn create_tree_walker(
-        doc: Document,
+        doc: &Document,
         root: &Node,
         what_to_show: u32,
         filter: Option<&NodeFilter>,
@@ -356,13 +362,15 @@ pub type TabsterElementStorage = TabsterElementStorageEntry;
 pub struct InternalAPI {
     unobserve: Option<Box<dyn Fn()>>,
     doc: Document,
+    tabster: Arc<RefCell<TabsterCore>>,
 }
 
 impl InternalAPI {
-    pub fn new(win: Window) -> Self {
+    pub fn new(win: Window, tabster: Arc<RefCell<TabsterCore>>) -> Self {
         Self {
             unobserve: None,
             doc: win.document().unwrap_throw(),
+            tabster,
         }
     }
     pub fn stop_observer(&mut self) {
@@ -372,7 +380,7 @@ impl InternalAPI {
     }
 
     pub fn resume_observer(&mut self, sync_state: bool) {
-        self.unobserve = Some(observe_mutations(&self.doc));
+        self.unobserve = Some(observe_mutations(&self.doc, self.tabster.clone()));
     }
 }
 
@@ -392,6 +400,7 @@ pub struct GroupperProps {
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct TabsterAttributeProps {
+    pub root: Option<RootProps>,
     pub groupper: Option<GroupperProps>,
     pub sys: Option<SysProps>,
     pub mover: Option<MoverProps>,
@@ -400,6 +409,10 @@ pub struct TabsterAttributeProps {
 impl TabsterAttributeProps {
     pub fn json_string(self) -> String {
         String::new()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.mover.is_none() && self.groupper.is_none() && self.sys.is_none()
     }
 }
 

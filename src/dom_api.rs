@@ -16,7 +16,7 @@ impl types::DOMAPI for DOM {
     }
 
     fn create_tree_walker(
-        doc: Document,
+        doc: &Document,
         root: &Node,
         what_to_show: u32,
         filter: Option<&NodeFilter>,

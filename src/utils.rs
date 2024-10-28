@@ -16,6 +16,67 @@ use web_sys::{
     Document, HtmlElement, Node, NodeFilter, TreeWalker,
 };
 
+pub struct WeakHTMLElement<T, D> {
+    weak_ref: T,
+    data: Option<D>,
+}
+
+impl<T, D: Clone> WeakHTMLElement<T, D> {
+    fn new(get_window: GetWindow, element: T, data: Option<D>) -> Self {
+        let context = get_instance_context(get_window);
+
+        // let ref: TabsterWeakRef<T>;
+        // if (context.WeakRef) {
+        //     ref = new context.WeakRef(element);
+        // } else {
+        //     ref = new FakeWeakRef(element);
+        //     context.fakeWeakRefs.push(ref);
+        // }
+
+        Self {
+            weak_ref: element,
+            data,
+        }
+    }
+
+    // fn get(&self) -> Option<T> {
+    //     const ref = this._ref;
+    //     let element: T | undefined;
+
+    //     if (ref) {
+    //         element = ref.deref();
+
+    //         if (!element) {
+    //             delete this._ref;
+    //         }
+    //     }
+
+    //     return element;
+    // }
+
+    fn get_data(&self) -> Option<D> {
+        self.data.clone()
+    }
+}
+
+static LAST_TABSTER_PART_ID: OnceLock<RwLock<usize>> = OnceLock::new();
+
+pub struct TabsterPart {
+    id: String,
+}
+
+impl TabsterPart {
+    pub fn new() -> Self {
+        let last_tabster_part_id = LAST_TABSTER_PART_ID.get_or_init(Default::default);
+        let id = *last_tabster_part_id.read().unwrap_throw() + 1;
+        *last_tabster_part_id.write().unwrap_throw() = id;
+
+        Self {
+            id: format!("i{}", id),
+        }
+    }
+}
+
 pub struct DummyInputManager {
     instance: Option<Arc<RefCell<DummyInputManagerCore>>>,
     element: HtmlElement,
@@ -208,7 +269,7 @@ impl DummyInput {
 }
 
 pub fn create_element_tree_walker(
-    doc: Document,
+    doc: &Document,
     root: &Node,
     accept_node: impl Fn(Node) -> u32 + 'static,
 ) -> Option<TreeWalker> {

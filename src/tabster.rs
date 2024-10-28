@@ -9,11 +9,7 @@ use crate::{
     types::{self, GetWindow, TabsterCoreProps, DOMAPI},
     web::set_timeout,
 };
-use web_sys::{
-    js_sys::WeakMap,
-    wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    HtmlElement, Node, Window,
-};
+use web_sys::{js_sys::WeakMap, wasm_bindgen::UnwrapThrowExt, HtmlElement, Node, Window};
 
 pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
     let tabster = TabsterCore::new(win, props);
@@ -22,19 +18,15 @@ pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
 
 pub struct Tabster {
     pub focusable: FocusableAPI,
-    pub root: RootAPI,
     pub core: Arc<RefCell<TabsterCore>>,
 }
 
 impl Tabster {
-    fn new(tabster: TabsterCore) -> Tabster {
-        let tabster = Arc::new(RefCell::new(tabster));
+    fn new(tabster: Arc<RefCell<TabsterCore>>) -> Tabster {
         let focusable = FocusableAPI::new(tabster.clone());
-        let root = RootAPI::new(tabster.clone());
 
         Self {
             focusable,
-            root,
             core: tabster,
         }
     }
@@ -87,7 +79,8 @@ pub struct TabsterCore {
     pub get_window: Arc<GetWindow>,
 
     // CoreAPIs
-    internal: Arc<RefCell<types::InternalAPI>>,
+    internal: Option<Arc<RefCell<types::InternalAPI>>>,
+    pub root: Option<RootAPI>,
 
     // Extended APIs
     pub groupper: Option<Arc<GroupperAPI>>,
@@ -97,36 +90,44 @@ pub struct TabsterCore {
 }
 
 impl TabsterCore {
-    fn new(win: Window, props: TabsterCoreProps) -> Self {
+    fn new(win: Window, props: TabsterCoreProps) -> Arc<RefCell<Self>> {
         let get_parent = props
             .get_parent
             .unwrap_or_else(|| Box::new(move |node| DOM::get_parent_node(Some(node))));
-        let internal = Arc::new(RefCell::new(types::InternalAPI::new(win.clone())));
         let get_window = {
             let win = win.clone();
             Arc::new(Box::new(move || win.clone()) as GetWindow)
         };
-        let mut this = Self {
+        let tabster = Arc::new(RefCell::new(Self {
             storage: TabsterCoreStorage::new(),
             get_parent,
-            win: Some(win),
+            win: Some(win.clone()),
             noop: false,
             control_tab: props.control_tab.unwrap_or(true),
             get_window,
-            internal: internal.clone(),
+            internal: None,
+            root: None,
             groupper: None,
             mover: None,
             modalizer: None,
             init_queue: Default::default(),
             init_timer: Default::default(),
-        };
+        }));
 
-        this.queue_init(move || {
-            let mut internal = internal.try_borrow_mut().unwrap_throw();
-            internal.resume_observer(true);
-        });
+        let internal = Arc::new(RefCell::new(types::InternalAPI::new(win, tabster.clone())));
+        let root = RootAPI::new(tabster.clone(), props.auto_root);
+        {
+            let mut tabster = tabster.borrow_mut();
+            tabster.internal = Some(internal.clone());
+            tabster.root = Some(root);
 
-        this
+            tabster.queue_init(move || {
+                let mut internal = internal.try_borrow_mut().unwrap_throw();
+                internal.resume_observer(true);
+            });
+        }
+
+        tabster
     }
 
     fn queue_init(&mut self, callback: impl FnOnce() + 'static) {

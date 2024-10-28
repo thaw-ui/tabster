@@ -1,26 +1,61 @@
 use crate::{
-    groupper::Groupper,
-    instance::get_tabster_on_element,
-    modalizer::Modalizer,
-    mover::Mover,
-    tabster::TabsterCore,
-    types::{self, GetTabsterContextOptions, TabsterContext},
+    groupper::Groupper, instance::{get_tabster_on_element, update_tabster_by_attribute}, modalizer::Modalizer, mover::Mover, set_tabster_attribute, tabster::TabsterCore, types::{self, GetTabsterContextOptions, TabsterContext}
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
-    HtmlElement, KeyboardEvent, Node, Window,
+    Document, HtmlElement, KeyboardEvent, Node, Window,
 };
 
 pub type WindowWithTabsterInstance = Window;
 
 pub struct RootAPI {
     tabster: Arc<RefCell<TabsterCore>>,
+    win: Arc<Box<dyn Fn() -> Window>>,
+    auto_root_waiting: bool,
+    auto_root: Option<types::RootProps>,
 }
 
 impl RootAPI {
-    pub fn new(tabster: Arc<RefCell<TabsterCore>>) -> Self {
-        Self { tabster }
+    pub fn new(tabster: Arc<RefCell<TabsterCore>>, auto_root: Option<types::RootProps>) -> Self {
+        let win = {
+            let tabster = tabster.borrow();
+            tabster.get_window.clone()
+        };
+        Self {
+            tabster,
+            win,
+            auto_root,
+            auto_root_waiting: false,
+        }
+    }
+
+    fn auto_root_create(&mut self) -> Option<types::Root> {
+        let doc = (self.win)().document().unwrap_throw();
+        let body = doc.body();
+
+        if let Some(body) = body {
+            self.auto_root_unwait(doc);
+
+            if let Some(props) = &self.auto_root {
+                let mut new_props = types::TabsterAttributeProps::default();
+                new_props.root = Some(props.clone());
+                set_tabster_attribute(body.clone(), new_props, Some(true));
+                update_tabster_by_attribute(self.tabster.clone(), body, None);
+                // return get_tabster_on_element(self.tabster
+                //     .clone(), &body)?.root;
+            }
+        } else if !self.auto_root_waiting {
+            self.auto_root_waiting = true;
+            // doc.addEventListener("readystatechange", this._autoRootCreate);
+        }
+
+        None
+    }
+
+    fn auto_root_unwait(&mut self, doc: Document) {
+        // doc.removeEventListener("readystatechange", this._autoRootCreate);
+        self.auto_root_waiting = false;
     }
 }
 
@@ -56,7 +91,7 @@ impl RootAPI {
             tabster.drain_init_queue();
         }
 
-        let root: Option<types::Root> = None;
+        let mut root: Option<types::Root> = None;
         let mut modalizer = None::<Modalizer>;
         let groupper = None::<Groupper>;
         let mover = None::<Mover>;
@@ -65,7 +100,7 @@ impl RootAPI {
         let modalizer_in_groupper = None::<Groupper>;
         let mut dir_right_to_left: Option<bool> = None;
         let mut uncontrolled = None::<HtmlElement>;
-        let mut cur_element = Some(reference_element.map_or(element, |el| el.into()));
+        let mut cur_element = Some(reference_element.map_or(element.clone(), |el| el.into()));
         let ignore_keydown = types::IgnoreKeydown::default(); // Types.FocusableProps["ignoreKeydown"] = {};
 
         loop {
@@ -128,7 +163,7 @@ impl RootAPI {
 
             if modalizer.is_none() {
                 if let Some(cur_modalizer) = cur_modalizer {
-                    // modalizer = Some(cur_modalizer);
+                    modalizer = Some(cur_modalizer.clone());
                 }
             }
 
@@ -136,7 +171,7 @@ impl RootAPI {
                 && cur_groupper.is_some()
                 && (modalizer.is_none() || cur_modalizer.is_some())
             {
-                if (modalizer.is_some()) {
+                if modalizer.is_some() {
                     // Modalizer dominates the groupper when they are on the same node and the groupper is active.
                     //         if (
                     //             !curGroupper.isActive() &&
@@ -183,15 +218,16 @@ impl RootAPI {
 
         // No root element could be found, try to get an auto root
         if root.is_none() {
-            let tabster = tabster.borrow();
-            // let rootAPI = tabster.root;
-            // const autoRoot = rootAPI._autoRoot;
-
-            // if (autoRoot) {
-            //     if (element.ownerDocument?.body) {
-            //         root = rootAPI._autoRootCreate();
-            //     }
-            // }
+            let mut tabster = tabster.borrow_mut();
+            if let Some(root_api) = tabster.root.as_mut() {
+                if root_api.auto_root.is_some() {
+                    if let Some(owner_document) = element.owner_document() {
+                        if owner_document.body().is_some() {
+                            root = root_api.auto_root_create();
+                        }
+                    }
+                }
+            }
         }
 
         if groupper.is_some() && mover.is_none() {

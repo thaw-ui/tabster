@@ -17,17 +17,18 @@ pub fn get_tabster_on_element(
 }
 
 pub fn update_tabster_by_attribute(
-    mut tabster: TabsterCore,
+    tabster: Arc<RefCell<TabsterCore>>,
     element: HtmlElement,
     dispose: Option<bool>,
 ) {
+    let mut tabster = tabster.borrow_mut();
     let new_attr_value = if dispose.unwrap_or_default() || tabster.noop {
         None
     } else {
         element.get_attribute(TABSTER_ATTRIBUTE_NAME)
     };
 
-    let mut entry = tabster.storage_entry(&element, None);
+    let entry = tabster.storage_entry(&element, None);
     let mut new_attr: Option<types::TabsterAttributeOnElement> = None;
 
     if let Some(new_attr_value) = new_attr_value {
@@ -108,20 +109,19 @@ pub fn update_tabster_by_attribute(
             //     );
             // }
         }
-    } else if new_tabster_props.mover.is_some() {
+    } else if let Some(new_tabster_props_mover) = &new_tabster_props.mover {
+        let sys = new_tabster_props.sys.clone();
         let mut tabster_on_element = tabster_on_element.borrow_mut();
-
         if tabster_on_element.mover.is_some() {
             // tabsterOnElement.mover.setProps(
             //     newTabsterProps.mover as Types.MoverProps
             // );
         } else {
-            // if (tabster.mover) {
-            //     tabsterOnElement.mover = tabster.mover.createMover(
-            //         element,
-            //         newTabsterProps.mover as Types.MoverProps,
-            //         sys
-            //     );
+            if let Some(tabster_mover) = &tabster.mover {
+                tabster_on_element.mover =
+                    Some(tabster_mover.create_mover(&element, new_tabster_props_mover.clone(), sys))
+            } else if cfg!(debug_assertions) {
+            }
             // } else if (__DEV__) {
             //     console.error(
             //         "Mover API used before initialization, please call `getMover()`"

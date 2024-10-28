@@ -19,6 +19,7 @@ web-sys = { version = "0.3.70", features = [
     "HtmlElement",
     "TreeWalker",
     "NodeFilter",
+    "NodeList",
     "MutationObserver",
     "MutationObserverInit",
     "MutationRecord",

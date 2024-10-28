@@ -18,3 +18,8 @@ pub fn set_timeout(window: &Window, handler: impl Fn() + 'static, timeout: i32) 
 macro_rules! console_log {
     ($($t:tt)*) => (web_sys::console::log_1(&web_sys::wasm_bindgen::JsValue::from_str(&format_args!($($t)*).to_string())))
 }
+
+#[macro_export]
+macro_rules! console_error {
+    ($($t:tt)*) => (web_sys::console::error_1(&web_sys::wasm_bindgen::JsValue::from_str(&format_args!($($t)*).to_string())))
+}
