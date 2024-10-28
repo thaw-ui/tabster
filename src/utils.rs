@@ -61,18 +61,22 @@ impl<T, D: Clone> WeakHTMLElement<T, D> {
 
 static LAST_TABSTER_PART_ID: OnceLock<RwLock<usize>> = OnceLock::new();
 
-pub struct TabsterPart {
-    id: String,
+pub struct TabsterPart<P> {
+    pub id: String,
+    tabster: Arc<RefCell<TabsterCore>>,
+    props: P,
 }
 
-impl TabsterPart {
-    pub fn new() -> Self {
+impl<P> TabsterPart<P> {
+    pub fn new(tabster: Arc<RefCell<TabsterCore>>, element: HtmlElement, props: P) -> Self {
         let last_tabster_part_id = LAST_TABSTER_PART_ID.get_or_init(Default::default);
         let id = *last_tabster_part_id.read().unwrap_throw() + 1;
         *last_tabster_part_id.write().unwrap_throw() = id;
 
         Self {
             id: format!("i{}", id),
+            tabster,
+            props,
         }
     }
 }

@@ -87,7 +87,7 @@ pub fn update_tabster_by_attribute(
         some_new_attr_object
     };
 
-    if new_tabster_props.groupper.is_some() {
+    if let Some(new_tabster_props_groupper) = &new_tabster_props.groupper {
         let sys = new_tabster_props.sys.clone();
         let mut tabster_on_element = tabster_on_element.borrow_mut();
         if tabster_on_element.groupper.is_some() {
@@ -96,7 +96,12 @@ pub fn update_tabster_by_attribute(
             // );
         } else {
             if let Some(tabster_groupper) = &tabster.groupper {
-                tabster_on_element.groupper = Some(tabster_groupper.create_groupper(&element, sys));
+                let mut tabster_groupper = tabster_groupper.borrow_mut();
+                tabster_on_element.groupper = Some(tabster_groupper.create_groupper(
+                    &element,
+                    new_tabster_props_groupper.clone(),
+                    sys,
+                ));
                 //         tabster.groupper.createGroupper(
                 //             element,
                 //             newTabsterProps.groupper as Types.GroupperProps,

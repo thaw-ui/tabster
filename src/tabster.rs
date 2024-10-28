@@ -1,14 +1,14 @@
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
-
 use crate::{
     dom_api::DOM,
     focusable::FocusableAPI,
     groupper::GroupperAPI,
     mover::MoverAPI,
     root::{RootAPI, WindowWithTabsterInstance},
+    state::focused_element::FocusedElementState,
     types::{self, GetWindow, TabsterCoreProps, DOMAPI},
     web::set_timeout,
 };
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use web_sys::{js_sys::WeakMap, wasm_bindgen::UnwrapThrowExt, HtmlElement, Node, Window};
 
 pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
@@ -80,10 +80,11 @@ pub struct TabsterCore {
 
     // CoreAPIs
     internal: Option<Arc<RefCell<types::InternalAPI>>>,
+    pub focused_element: Option<FocusedElementState>,
     pub root: Option<RootAPI>,
 
     // Extended APIs
-    pub groupper: Option<Arc<GroupperAPI>>,
+    pub groupper: Option<Arc<RefCell<GroupperAPI>>>,
     pub mover: Option<MoverAPI>,
     pub modalizer: Option<types::ModalizerAPI>,
     pub get_parent: Box<dyn Fn(Node) -> Option<Node>>,
@@ -104,8 +105,9 @@ impl TabsterCore {
             win: Some(win.clone()),
             noop: false,
             control_tab: props.control_tab.unwrap_or(true),
-            get_window,
+            get_window: get_window.clone(),
             internal: None,
+            focused_element: None,
             root: None,
             groupper: None,
             mover: None,
@@ -115,10 +117,12 @@ impl TabsterCore {
         }));
 
         let internal = Arc::new(RefCell::new(types::InternalAPI::new(win, tabster.clone())));
+        let focused_element = FocusedElementState::new(tabster.clone(), get_window);
         let root = RootAPI::new(tabster.clone(), props.auto_root);
         {
             let mut tabster = tabster.borrow_mut();
             tabster.internal = Some(internal.clone());
+            tabster.focused_element = Some(focused_element);
             tabster.root = Some(root);
 
             tabster.queue_init(move || {
@@ -206,15 +210,15 @@ impl TabsterCore {
 
 /// Creates a new groupper instance or returns an existing one
 /// @param tabster Tabster instance
-pub fn get_groupper(tabster: &Tabster) -> Arc<GroupperAPI> {
+pub fn get_groupper(tabster: &Tabster) -> Arc<RefCell<GroupperAPI>> {
     let tabster_core = tabster.core.clone();
     let mut tabster_core_ref = tabster_core.try_borrow_mut().unwrap_throw();
 
     if tabster_core_ref.groupper.is_none() {
-        tabster_core_ref.groupper = Some(Arc::new(GroupperAPI::new(
+        tabster_core_ref.groupper = Some(Arc::new(RefCell::new(GroupperAPI::new(
             tabster_core.clone(),
             tabster_core_ref.get_window.clone(),
-        )));
+        ))));
     }
 
     tabster_core_ref.groupper.clone().unwrap_throw()

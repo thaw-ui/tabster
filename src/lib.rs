@@ -8,6 +8,7 @@ mod modalizer;
 mod mover;
 mod mutation_event;
 mod root;
+mod state;
 mod tabster;
 pub mod types;
 mod utils;

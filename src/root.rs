@@ -1,5 +1,11 @@
 use crate::{
-    groupper::Groupper, instance::{get_tabster_on_element, update_tabster_by_attribute}, modalizer::Modalizer, mover::Mover, set_tabster_attribute, tabster::TabsterCore, types::{self, GetTabsterContextOptions, TabsterContext}
+    groupper::Groupper,
+    instance::{get_tabster_on_element, update_tabster_by_attribute},
+    modalizer::Modalizer,
+    mover::Mover,
+    set_tabster_attribute,
+    tabster::TabsterCore,
+    types::{self, GetTabsterContextOptions, TabsterContext},
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{

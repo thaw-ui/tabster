@@ -322,7 +322,7 @@ pub struct TabsterAttributeOnElement {
 #[derive(Default)]
 pub struct TabsterOnElement {
     pub mover: Option<Mover>,
-    pub groupper: Option<Groupper>,
+    pub groupper: Option<Arc<RefCell<Groupper>>>,
     pub modalizer: Option<Modalizer>,
     pub focusable: Option<FocusableProps>,
     pub uncontrolled: Option<UncontrolledProps>,

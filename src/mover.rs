@@ -19,7 +19,7 @@ impl MoverDummyManager {
 }
 
 pub struct Mover {
-    part: TabsterPart,
+    part: TabsterPart<types::MoverProps>,
     dummy_manager: Option<MoverDummyManager>,
     visibility_tolerance: f32,
 }
@@ -49,7 +49,7 @@ impl Mover {
         //     props.memorizeCurrent ? this._current : undefined;
 
         let mut this = Self {
-            part: TabsterPart::new(),
+            part: TabsterPart::new(tabster.clone(), element.clone(), props),
             dummy_manager: None,
             visibility_tolerance,
         };
