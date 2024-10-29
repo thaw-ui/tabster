@@ -47,9 +47,12 @@ impl RootAPI {
                 let mut new_props = types::TabsterAttributeProps::default();
                 new_props.root = Some(props.clone());
                 set_tabster_attribute(body.clone(), new_props, Some(true));
-                update_tabster_by_attribute(self.tabster.clone(), body, None);
-                // return get_tabster_on_element(self.tabster
-                //     .clone(), &body)?.root;
+                update_tabster_by_attribute(&self.tabster, &body, None);
+                let Some(tabster_on_element) = get_tabster_on_element(&self.tabster, &body) else {
+                    return None;
+                };
+                let tabster_on_element = tabster_on_element.borrow();
+                return tabster_on_element.root.clone();
             }
         } else if !self.auto_root_waiting {
             self.auto_root_waiting = true;
@@ -76,7 +79,7 @@ impl RootAPI {
     ///
     /// returns: None if the element is not a child of a tabster root, otherwise all applicable tabster behaviours and configurations
     pub fn get_tabster_context(
-        tabster: Arc<RefCell<TabsterCore>>,
+        tabster: &Arc<RefCell<TabsterCore>>,
         element: Node,
         options: GetTabsterContextOptions,
     ) -> Option<types::TabsterContext> {
@@ -100,14 +103,14 @@ impl RootAPI {
         let mut root: Option<Arc<types::Root>> = None;
         let mut modalizer = None::<Modalizer>;
         let mut groupper = None::<Arc<RefCell<Groupper>>>;
-        let mover = None::<Mover>;
+        let mut mover = None::<Arc<RefCell<Mover>>>;
         let mut excluded_from_mover = false;
         let mut groupper_before_mover = None::<bool>;
-        let modalizer_in_groupper = None::<Groupper>;
+        let mut modalizer_in_groupper = None::<Arc<RefCell<Groupper>>>;
         let mut dir_right_to_left: Option<bool> = None;
         let mut uncontrolled = None::<HtmlElement>;
         let mut cur_element = Some(reference_element.map_or(element.clone(), |el| el.into()));
-        let ignore_keydown = types::IgnoreKeydown::default(); // Types.FocusableProps["ignoreKeydown"] = {};
+        let mut ignore_keydown = types::IgnoreKeydown::default(); // Types.FocusableProps["ignoreKeydown"] = {};
 
         loop {
             let Some(new_cur_element) = cur_element.clone() else {
@@ -117,7 +120,7 @@ impl RootAPI {
                 break;
             }
             let tabster_on_element = get_tabster_on_element(
-                tabster.clone(),
+                &tabster,
                 &new_cur_element.clone().dyn_into().unwrap_throw(),
             );
 
@@ -176,46 +179,70 @@ impl RootAPI {
             if groupper.is_none() && (modalizer.is_none() || cur_modalizer.is_some()) {
                 if let Some(cur_groupper) = cur_groupper {
                     if modalizer.is_some() {
-                        let mut cur_groupper = cur_groupper.borrow_mut();
-                        // Modalizer dominates the groupper when they are on the same node and the groupper is active.
-                        if !cur_groupper.is_active(None).unwrap_or_default() {}
-                        //         if (
-                        //             !curGroupper.isActive() &&
-                        //             curGroupper.getProps().tabbability &&
-                        //             modalizer.userId !== tabster.modalizer?.activeId
-                        //         ) {
-                        //             modalizer = undefined;
-                        //             groupper = curGroupper;
-                        //         }
+                        let mut cur_groupper_ref = cur_groupper.borrow_mut();
 
-                        //         modalizerInGroupper = curGroupper;
+                        let user_id = {
+                            if let Some(modalizer) = modalizer.as_ref() {
+                                Some(modalizer.user_id.clone())
+                            } else {
+                                None
+                            }
+                        };
+                        let active_id = {
+                            let tabster = tabster.borrow();
+                            if let Some(modalizer) = tabster.modalizer.as_ref() {
+                                modalizer.active_id.clone()
+                            } else {
+                                None
+                            }
+                        };
+                        // Modalizer dominates the groupper when they are on the same node and the groupper is active.
+                        if !cur_groupper_ref.is_active(None).unwrap_or_default()
+                            && cur_groupper_ref.get_props().tabbability.unwrap_or_default() != 0
+                            && user_id != active_id
+                        {
+                            modalizer = None;
+                            groupper = Some(cur_groupper.clone());
+                        }
+                        modalizer_in_groupper = Some(cur_groupper.clone());
                     } else {
                         groupper = Some(cur_groupper.clone());
                     }
                 }
             }
-
-            // if (
-            //     !mover &&
-            //     curMover &&
-            //     (!modalizer || curModalizer) &&
-            //     (!curGroupper || curElement !== element) &&
-            //     curElement.contains(element) // Mover makes sense only for really inside elements, not for virutal out of the DOM order children.
-            // ) {
-            //     mover = curMover;
-            //     groupperBeforeMover = !!groupper && groupper !== curGroupper;
-            // }
+            if mover.is_none()
+                && cur_mover.is_some()
+                && (modalizer.is_none() || cur_modalizer.is_some())
+                && (cur_groupper.is_none() || cur_element != Some(element.clone()))
+                && cur_element
+                    .clone()
+                    .map(|el| el.contains(Some(&element)))
+                    .unwrap_or_default()
+            // Mover makes sense only for really inside elements, not for virutal out of the DOM order children.
+            {
+                mover = cur_mover.clone();
+                groupper_before_mover = if let Some(groupper) = groupper.as_ref() {
+                    if let Some(cur_groupper) = cur_groupper {
+                        Some(!Arc::ptr_eq(&groupper, cur_groupper))
+                    } else {
+                        Some(false)
+                    }
+                } else {
+                    Some(false)
+                };
+            }
 
             if let Some(tabster_on_element_root) = tabster_on_element.root.clone() {
                 root = Some(tabster_on_element_root);
             }
 
-            // if (tabsterOnElement.focusable?.ignoreKeydown) {
-            //     Object.assign(
-            //         ignoreKeydown,
-            //         tabsterOnElement.focusable.ignoreKeydown
-            //     );
-            // }
+            if let Some(tabster_on_element_focusable) = tabster_on_element.focusable.clone() {
+                if let Some(focusable_ignore_keydown) =
+                    tabster_on_element_focusable.ignore_keydown.clone()
+                {
+                    ignore_keydown.assign(focusable_ignore_keydown);
+                }
+            }
 
             cur_element = {
                 let tabster = tabster.borrow();
@@ -268,7 +295,7 @@ impl RootAPI {
                 //           modalizer,
                 //           groupper,
                 //           mover,
-                //           modalizerInGroupper,
+                modalizer_in_groupper,
             })
         } else {
             None

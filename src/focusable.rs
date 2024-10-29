@@ -78,7 +78,7 @@ impl FocusableAPI {
                 break;
             };
 
-            let tabster_on_element = get_tabster_on_element(self.tabster.clone(), e_ref);
+            let tabster_on_element = get_tabster_on_element(&self.tabster, e_ref);
 
             if self.is_hidden(e_ref.clone()) {
                 return false;
@@ -276,7 +276,7 @@ impl FocusableAPI {
                 } else {
                     if let Some(found_element) = found_element {
                         out.uncontrolled = RootAPI::get_tabster_context(
-                            tabster,
+                            &tabster,
                             found_element.into(),
                             Default::default(),
                         )
@@ -385,7 +385,7 @@ impl FocusableAPI {
             return *NodeFilterEnum::FilterReject;
         }
 
-        if get_dummy_input_container(Some(element.clone())).is_some() {
+        if get_dummy_input_container(&Some(element.clone())).is_some() {
             return *NodeFilterEnum::FilterReject;
         }
 

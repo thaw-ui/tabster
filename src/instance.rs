@@ -8,7 +8,7 @@ use std::{cell::RefCell, sync::Arc};
 use web_sys::{wasm_bindgen::UnwrapThrowExt, HtmlElement};
 
 pub fn get_tabster_on_element(
-    tabster: Arc<RefCell<TabsterCore>>,
+    tabster: &Arc<RefCell<TabsterCore>>,
     element: &HtmlElement,
 ) -> Option<Arc<RefCell<types::TabsterOnElement>>> {
     let mut tabster = tabster.borrow_mut();
@@ -18,8 +18,8 @@ pub fn get_tabster_on_element(
 }
 
 pub fn update_tabster_by_attribute(
-    tabster: Arc<RefCell<TabsterCore>>,
-    element: HtmlElement,
+    tabster: &Arc<RefCell<TabsterCore>>,
+    element: &HtmlElement,
     dispose: Option<bool>,
 ) {
     let mut tabster = tabster.borrow_mut();

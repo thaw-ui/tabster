@@ -1,12 +1,19 @@
 use crate::{
     dom_api::DOM,
     instance::get_tabster_on_element,
+    root::RootAPI,
     tabster::TabsterCore,
     types::{self, FindFirstProps, GetWindow, DOMAPI},
-    utils::{DummyInputManager, TabsterPart},
+    utils::{get_dummy_input_container, DummyInputManager, TabsterPart},
     web::set_timeout,
 };
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    default,
+    ops::Deref,
+    sync::Arc,
+};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
     HtmlElement,
@@ -17,11 +24,56 @@ struct GroupperDummyManager(DummyInputManager);
 impl GroupperDummyManager {
     fn new(
         element: HtmlElement,
-        groupper: &Groupper,
+        groupper: Arc<RefCell<Groupper>>,
         tabster: Arc<RefCell<TabsterCore>>,
         sys: Option<types::SysProps>,
     ) -> Self {
-        Self(DummyInputManager::new(tabster, element, sys))
+        let mut dummy_input_manager = DummyInputManager::new(tabster.clone(), element.clone(), sys);
+        dummy_input_manager.set_handlers(
+            Some(Box::new(move |dummy_input, is_backward, related_target| {
+                let container = element.clone();
+                if let Some(input) = dummy_input.input {
+                    if let Some(ctx) =
+                        RootAPI::get_tabster_context(&tabster, input.into(), Default::default())
+                    {
+                        let groupper = groupper.borrow();
+                        let next = if let Some(next_tabbable) = groupper.find_next_tabbable(
+                            related_target,
+                            None,
+                            Some(is_backward),
+                            Some(true),
+                        ) {
+                            next_tabbable.element
+                        } else {
+                            None
+                        };
+
+                        if next.is_none() {
+                            //     next = FocusedElementState.findNextTabbable(
+                            //         tabster,
+                            //         ctx,
+                            //         undefined,
+                            //         dummyInput.isOutside
+                            //             ? input
+                            //             : getAdjacentElement(
+                            //                   container,
+                            //                   !isBackward
+                            //               ),
+                            //         undefined,
+                            //         isBackward,
+                            //         true
+                            //     )?.element;
+                        }
+
+                        // if (next) {
+                        //     nativeFocus(next);
+                        // }
+                    }
+                }
+            })),
+            None,
+        );
+        Self(dummy_input_manager)
     }
 }
 
@@ -32,40 +84,137 @@ pub struct Groupper {
     dummy_manager: Option<GroupperDummyManager>,
 }
 
+impl Deref for Groupper {
+    type Target = TabsterPart<types::GroupperProps>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.part
+    }
+}
+
 impl Groupper {
     pub fn new(
         tabster: Arc<RefCell<TabsterCore>>,
         element: &HtmlElement,
         props: types::GroupperProps,
         sys: Option<types::SysProps>,
-    ) -> Self {
-        let mut this = Self {
+    ) -> Arc<RefCell<Self>> {
+        let this = Arc::new(RefCell::new(Self {
             part: TabsterPart::new(tabster.clone(), element.clone(), props),
             should_tab_inside: false,
             first: None,
             dummy_manager: None,
-        };
+        }));
 
         let control_tab = {
             let tabster = tabster.borrow();
             tabster.control_tab
         };
-        this.dummy_manager = if !control_tab {
+        let dummy_manager = if !control_tab {
             Some(GroupperDummyManager::new(
                 element.clone(),
-                &this,
+                this.clone(),
                 tabster,
                 sys,
             ))
         } else {
             None
         };
-
+        {
+            let mut this = this.borrow_mut();
+            this.dummy_manager = dummy_manager;
+        }
         this
     }
 
-    pub fn id(&self) -> &String {
-        &self.part.id
+    fn find_next_tabbable(
+        &self,
+        current_element: Option<HtmlElement>,
+        reference_element: Option<HtmlElement>,
+        is_backward: Option<bool>,
+        ignore_accessibility: Option<bool>,
+    ) -> Option<types::NextTabbable> {
+        let Some(groupper_element) = self.get_element() else {
+            return None;
+        };
+
+        let current_is_dummy = get_dummy_input_container(&current_element) == Some(groupper_element);
+
+        // if !self.should_tab_inside && current_element.is_some() && DOM::node_contains(Some(groupper_element.into), child) {
+
+        // }
+
+        // if (
+        //     !this._shouldTabInside &&
+        //     currentElement &&
+        //     dom.nodeContains(groupperElement, currentElement) &&
+        //     !currentIsDummy
+        // ) {
+        //     return { element: undefined, outOfDOMOrder: true };
+        // }
+
+        // const groupperFirstFocusable = this.getFirst(true);
+
+        // if (
+        //     !currentElement ||
+        //     !dom.nodeContains(groupperElement, currentElement) ||
+        //     currentIsDummy
+        // ) {
+        //     return {
+        //         element: groupperFirstFocusable,
+        //         outOfDOMOrder: true,
+        //     };
+        // }
+
+        // const tabster = this._tabster;
+        // let next: HTMLElement | null | undefined = null;
+        // let outOfDOMOrder = false;
+        // let uncontrolled: HTMLElement | null | undefined;
+
+        // if (this._shouldTabInside && groupperFirstFocusable) {
+        //     const findProps: Types.FindNextProps = {
+        //         container: groupperElement,
+        //         currentElement,
+        //         referenceElement,
+        //         ignoreAccessibility,
+        //         useActiveModalizer: true,
+        //     };
+
+        //     const findPropsOut: Types.FindFocusableOutputProps = {};
+
+        //     next = tabster.focusable[isBackward ? "findPrev" : "findNext"](
+        //         findProps,
+        //         findPropsOut
+        //     );
+
+        //     outOfDOMOrder = !!findPropsOut.outOfDOMOrder;
+
+        //     if (
+        //         !next &&
+        //         this._props.tabbability ===
+        //             GroupperTabbabilities.LimitedTrapFocus
+        //     ) {
+        //         next = tabster.focusable[isBackward ? "findLast" : "findFirst"](
+        //             {
+        //                 container: groupperElement,
+        //                 ignoreAccessibility,
+        //                 useActiveModalizer: true,
+        //             },
+        //             findPropsOut
+        //         );
+
+        //         outOfDOMOrder = true;
+        //     }
+
+        //     uncontrolled = findPropsOut.uncontrolled;
+        // }
+
+        // return {
+        //     element: next,
+        //     uncontrolled,
+        //     outOfDOMOrder,
+        // };
+        None
     }
 
     pub fn is_active(&mut self, no_if_first_is_focused: Option<bool>) -> Option<bool> {
@@ -77,8 +226,7 @@ impl Groupper {
             let Some(e) = DOM::get_parent_element(el) else {
                 break;
             };
-            if let Some(tabster_on_element) = get_tabster_on_element(self.part.tabster.clone(), &e)
-            {
+            if let Some(tabster_on_element) = get_tabster_on_element(&self.tabster, &e) {
                 let tabster_on_element = tabster_on_element.borrow();
                 if let Some(g) = tabster_on_element.groupper.clone() {
                     let g = g.borrow();
@@ -117,12 +265,11 @@ impl Groupper {
     }
 
     fn get_first(&mut self, or_container: bool) -> Option<HtmlElement> {
-        let groupper_element = self.part.get_element();
         let mut first = None::<HtmlElement>;
 
-        if let Some(groupper_element) = self.part.get_element() {
+        if let Some(groupper_element) = self.get_element() {
             let focusable = {
-                let tabster = self.part.tabster.borrow();
+                let tabster = self.tabster.borrow();
                 tabster.focusable.clone().unwrap_throw()
             };
             let mut focusable = focusable.borrow_mut();
@@ -190,8 +337,10 @@ impl GroupperAPI {
             props,
             sys,
         );
-        let id = new_groupper.id().clone();
-        let new_groupper = Arc::new(RefCell::new(new_groupper));
+        let id = {
+            let new_groupper = new_groupper.borrow();
+            new_groupper.id().clone()
+        };
 
         self.grouppers.insert(id, new_groupper.clone());
 
@@ -206,7 +355,7 @@ impl GroupperAPI {
         if let Some(focused_element) = focused_element {
             if DOM::node_contains(
                 Some(element.clone().dyn_into().unwrap_throw()),
-                Some(focused_element.dyn_into().unwrap_throw()),
+                Some(focused_element.clone().dyn_into().unwrap_throw()),
             ) {
                 let update_timer_is_none = {
                     let update_timer = self.update_timer.borrow();
@@ -215,25 +364,94 @@ impl GroupperAPI {
                 if update_timer_is_none {
                     let update_timer = self.update_timer.clone();
                     let mut update_timer_ref = self.update_timer.try_borrow_mut().unwrap_throw();
+                    let tabster = self.tabster.clone();
                     let timer = set_timeout(
                         &(self.win)(),
                         move || {
                             let mut update_timer = update_timer.try_borrow_mut().unwrap_throw();
                             *update_timer = None;
+                            let fe = {
+                                let tabster = tabster.borrow();
+                                if let Some(fe) = tabster.focused_element.as_ref() {
+                                    fe.get_focused_element()
+                                } else {
+                                    None
+                                }
+                            };
                             // Making sure the focused element hasn't changed.
-                            // if (
-                            //     focusedElement ===
-                            //     this._tabster.focusedElement.getFocusedElement()
-                            // ) {
-                            //     this._updateCurrent(focusedElement, true, true);
-                            // }
+                            if Some(&focused_element) == fe.as_ref() {
+                                Self::update_current(
+                                    tabster.clone(),
+                                    &focused_element,
+                                    Some(true),
+                                    Some(true),
+                                );
+                            }
                         },
                         0,
                     );
+                    *update_timer_ref = Some(timer);
                 }
             }
         }
 
         new_groupper
+    }
+
+    fn update_current(
+        tabster: Arc<RefCell<TabsterCore>>,
+        element: &HtmlElement,
+        include_target: Option<bool>,
+        check_target: Option<bool>,
+    ) {
+        // if (this._updateTimer) {
+        //     this._win().clearTimeout(this._updateTimer);
+        //     delete this._updateTimer;
+        // }
+
+        let mut new_ids = HashSet::new();
+        let mut is_target = true;
+        let mut el = Some(element.clone());
+
+        loop {
+            let Some(el_ref) = el.as_ref() else {
+                break;
+            };
+            if let Some(tabster_on_element) = get_tabster_on_element(&tabster, el_ref) {
+                let tabster_on_element = tabster_on_element.borrow();
+                if let Some(groupper) = tabster_on_element.groupper.as_ref() {
+                    let groupper = groupper.borrow();
+                    new_ids.insert(groupper.id.clone());
+
+                    if is_target && check_target.unwrap_or_default() && el_ref != element {
+                        is_target = false;
+                    }
+
+                    if include_target.unwrap_or_default() || !is_target {
+                        //             this._current[groupper.id] = groupper;
+                        //             const isTabbable =
+                        //                 groupper.isActive() ||
+                        //                 (element !== el &&
+                        //                     (!groupper.getProps().delegated ||
+                        //                         groupper.getFirst(false) !== element));
+
+                        //             groupper.makeTabbable(isTabbable);
+                    }
+
+                    is_target = false;
+                }
+            }
+            el = DOM::get_parent_element(Some(el_ref.clone()));
+        }
+
+        // for (const id of Object.keys(this._current)) {
+        //     const groupper = this._current[id];
+
+        //     if (!(groupper.id in newIds)) {
+        //         groupper.makeTabbable(false);
+        //         groupper.setFirst(undefined);
+        //         delete this._current[id];
+        //     }
+        // }
     }
 }

@@ -13,7 +13,7 @@ use std::{
 };
 use web_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    Document, Element, HtmlElement, Node, NodeFilter, TreeWalker,
+    Document, HtmlElement, Node, NodeFilter, TreeWalker,
 };
 
 pub struct WeakHTMLElement<T, D> {
@@ -85,10 +85,22 @@ impl<P> TabsterPart<P> {
     pub fn get_element(&self) -> Option<HtmlElement> {
         Some(self.element.clone())
     }
+
+    pub fn id(&self) -> &String {
+        &self.id
+    }
+
+    pub fn get_props(&self) -> &P {
+        &self.props
+    }
 }
+
+pub type DummyInputFocusCallback = Box<dyn Fn(DummyInput, bool, Option<HtmlElement>)>;
 
 pub struct DummyInputManager {
     instance: Option<Arc<RefCell<DummyInputManagerCore>>>,
+    on_focus_in: Option<DummyInputFocusCallback>,
+    on_focus_out: Option<DummyInputFocusCallback>,
     element: HtmlElement,
 }
 
@@ -101,8 +113,19 @@ impl DummyInputManager {
         let instance = DummyInputManagerCore::new(tabster, element.clone(), sys);
         Self {
             instance: Some(instance),
+            on_focus_in: None,
+            on_focus_out: None,
             element,
         }
+    }
+
+    pub fn set_handlers(
+        &mut self,
+        on_focus_in: Option<DummyInputFocusCallback>,
+        on_focus_out: Option<DummyInputFocusCallback>,
+    ) {
+        self.on_focus_in = on_focus_in;
+        self.on_focus_out = on_focus_out;
     }
 }
 
@@ -220,8 +243,8 @@ impl DummyInputManagerCore {
     }
 }
 
-struct DummyInput {
-    input: Option<HtmlElement>,
+pub struct DummyInput {
+    pub input: Option<HtmlElement>,
 }
 
 impl DummyInput {
@@ -481,7 +504,7 @@ pub fn is_display_none(element: HtmlElement) -> bool {
 /// If the passed element is Tabster dummy input, returns the container element this dummy input belongs to.
 /// element: Element to check for being dummy input.
 /// returns: Dummy input container element (if the passed element is a dummy input) or null.
-pub fn get_dummy_input_container(element: Option<HtmlElement>) -> Option<HtmlElement> {
+pub fn get_dummy_input_container(element: &Option<HtmlElement>) -> Option<HtmlElement> {
     // return (
     //     (
     //         element as HTMLElementWithDummyContainer | null | undefined

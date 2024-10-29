@@ -1,21 +1,15 @@
+use crate::{
+    groupper::Groupper, modalizer::Modalizer, mover::Mover, mutation_event::observe_mutations,
+    tabster::TabsterCore,
+};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{
-    js_sys::Function,
-    wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    Document, Element, HtmlElement, KeyboardEvent, MutationObserver, MutationRecord, Node,
-    NodeFilter, TreeWalker, Window,
+    wasm_bindgen::UnwrapThrowExt, Document, Element, HtmlElement, KeyboardEvent, MutationObserver,
+    MutationRecord, Node, NodeFilter, TreeWalker, Window,
 };
 
-use crate::{
-    groupper::Groupper,
-    modalizer::Modalizer,
-    mover::Mover,
-    mutation_event::observe_mutations,
-    tabster::{self, TabsterCore},
-};
-
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct IgnoreKeydown {
     tab: Option<bool>,
     // Escape?: boolean;
@@ -35,6 +29,13 @@ impl IgnoreKeydown {
         match key {
             "tab" => self.tab,
             _ => None,
+        }
+    }
+
+    pub fn assign(&mut self, other: Self) {
+        let Self { tab } = other;
+        if tab.is_some() {
+            self.tab = tab;
         }
     }
 }
@@ -84,6 +85,7 @@ pub struct GetTabsterContextOptions {
 pub struct TabsterContext {
     pub root: Arc<Root>,
     pub groupper_before_mover: Option<bool>,
+    pub modalizer_in_groupper: Option<Arc<RefCell<Groupper>>>,
     /// Whether `dir='rtl'` is set on an ancestor
     pub rtl: Option<bool>,
     pub excluded_from_mover: Option<bool>,
@@ -112,19 +114,31 @@ pub type MoverDirection = u8;
 /// 0 | 1 | 2
 pub type Visibility = u8;
 
+pub struct NextTabbable {
+    pub element: Option<HtmlElement>,
+    pub uncontrolled: Option<HtmlElement>,
+    pub out_of_dom_order: Option<bool>,
+}
+
 #[derive(Serialize, Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct MoverProps {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub direction: Option<MoverDirection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub memorize_current: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tabbable: Option<bool>,
     /// Whether to allow cyclic navigation in the mover
     /// Can only be applied if navigationType is MoverKeys.Arrows
     /// @defaultValue false
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cyclic: Option<bool>,
     /// In case we need a rich state of the elements inside a Mover,
     /// we can track it. It takes extra resourses and might affect
     /// performance when a Mover has many elements inside, so make sure
     /// you use this prop when it is really needed.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub track_state: Option<bool>,
     /// When set to Visibility.Visible or Visibility.PartiallyVisible,
     /// uses the visibility part of the trackState prop to be able to
@@ -133,6 +147,7 @@ pub struct MoverProps {
     // visibilityAware?: Visibility;
     /// When true, Mover will try to locate a focusable with Focusable.isDefault
     /// property as a prioritized element to focus. True by default.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub has_default: Option<bool>,
     /// A value between 0 and 1 that specifies the tolerance allowed
     /// when testing for visibility.
@@ -140,10 +155,12 @@ pub struct MoverProps {
     /// an element of height 100px has 10px that are above the viewport
     /// hidden by scroll. This element is a valid visible element to focus.
     /// @default 0.8
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub visibility_tolerance: Option<f32>,
 }
 
 pub struct ModalizerAPI {
+    pub active_id: Option<String>,
     pub is_augmented: Box<dyn Fn(HtmlElement) -> bool>,
 }
 
@@ -325,7 +342,7 @@ pub struct TabsterOnElement {
     pub mover: Option<Arc<RefCell<Mover>>>,
     pub groupper: Option<Arc<RefCell<Groupper>>>,
     pub modalizer: Option<Modalizer>,
-    pub focusable: Option<FocusableProps>,
+    pub focusable: Option<Arc<FocusableProps>>,
     pub uncontrolled: Option<UncontrolledProps>,
 }
 
@@ -401,9 +418,13 @@ pub struct GroupperProps {
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct TabsterAttributeProps {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub root: Option<RootProps>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub groupper: Option<GroupperProps>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sys: Option<SysProps>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mover: Option<MoverProps>,
 }
 

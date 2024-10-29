@@ -38,8 +38,8 @@ pub fn observe_mutations(doc: &Document, tabster: Arc<RefCell<TabsterCore>>) -> 
                         // So, we remember the removed nodes and ignore attribute changes for them.
                         if !removed_nodes.has(&target) {
                             update_tabster_by_attribute(
-                                tabster.clone(),
-                                target.dyn_into().unwrap_throw(),
+                                &tabster,
+                                &target.dyn_into().unwrap_throw(),
                                 None,
                             );
                         }
