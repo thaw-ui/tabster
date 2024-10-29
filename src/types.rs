@@ -82,7 +82,7 @@ pub struct GetTabsterContextOptions {
 }
 
 pub struct TabsterContext {
-    pub root: Root,
+    pub root: Arc<Root>,
     pub groupper_before_mover: Option<bool>,
     /// Whether `dir='rtl'` is set on an ancestor
     pub rtl: Option<bool>,
@@ -114,18 +114,18 @@ pub type Visibility = u8;
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct MoverProps {
-    direction: Option<MoverDirection>,
-    memorize_current: Option<bool>,
-    tabbable: Option<bool>,
+    pub direction: Option<MoverDirection>,
+    pub memorize_current: Option<bool>,
+    pub tabbable: Option<bool>,
     /// Whether to allow cyclic navigation in the mover
     /// Can only be applied if navigationType is MoverKeys.Arrows
     /// @defaultValue false
-    cyclic: Option<bool>,
+    pub cyclic: Option<bool>,
     /// In case we need a rich state of the elements inside a Mover,
     /// we can track it. It takes extra resourses and might affect
     /// performance when a Mover has many elements inside, so make sure
     /// you use this prop when it is really needed.
-    track_state: Option<bool>,
+    pub track_state: Option<bool>,
     /// When set to Visibility.Visible or Visibility.PartiallyVisible,
     /// uses the visibility part of the trackState prop to be able to
     /// go to first/last visible element (instead of first/last focusable
@@ -133,7 +133,7 @@ pub struct MoverProps {
     // visibilityAware?: Visibility;
     /// When true, Mover will try to locate a focusable with Focusable.isDefault
     /// property as a prioritized element to focus. True by default.
-    has_default: Option<bool>,
+    pub has_default: Option<bool>,
     /// A value between 0 and 1 that specifies the tolerance allowed
     /// when testing for visibility.
     /// @example
@@ -321,7 +321,8 @@ pub struct TabsterAttributeOnElement {
 
 #[derive(Default)]
 pub struct TabsterOnElement {
-    pub mover: Option<Mover>,
+    pub root: Option<Arc<Root>>,
+    pub mover: Option<Arc<RefCell<Mover>>>,
     pub groupper: Option<Arc<RefCell<Groupper>>>,
     pub modalizer: Option<Modalizer>,
     pub focusable: Option<FocusableProps>,
@@ -389,7 +390,7 @@ pub type GroupperTabbability = u8;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct GroupperProps {
-    tabbability: Option<GroupperTabbability>,
+    pub tabbability: Option<GroupperTabbability>,
     delegated: Option<bool>, // This allows to tweak the groupper behaviour for the cases when
                              // the groupper container is not focusable and groupper has Limited or LimitedTrapFocus
                              // tabbability. By default, the groupper will automatically become active once the focus

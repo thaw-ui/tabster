@@ -17,13 +17,17 @@ pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
 }
 
 pub struct Tabster {
-    pub focusable: FocusableAPI,
+    pub focusable: Arc<RefCell<FocusableAPI>>,
     pub core: Arc<RefCell<TabsterCore>>,
 }
 
 impl Tabster {
     fn new(tabster: Arc<RefCell<TabsterCore>>) -> Tabster {
-        let focusable = FocusableAPI::new(tabster.clone());
+        let focusable = Arc::new(RefCell::new(FocusableAPI::new(tabster.clone())));
+        {
+            let mut tabster = tabster.borrow_mut();
+            tabster.focusable = Some(focusable.clone());
+        }
 
         Self {
             focusable,
@@ -81,11 +85,13 @@ pub struct TabsterCore {
     // CoreAPIs
     internal: Option<Arc<RefCell<types::InternalAPI>>>,
     pub focused_element: Option<FocusedElementState>,
+    /// .unwrap
+    pub focusable: Option<Arc<RefCell<FocusableAPI>>>,
     pub root: Option<RootAPI>,
 
     // Extended APIs
     pub groupper: Option<Arc<RefCell<GroupperAPI>>>,
-    pub mover: Option<MoverAPI>,
+    pub mover: Option<Arc<RefCell<MoverAPI>>>,
     pub modalizer: Option<types::ModalizerAPI>,
     pub get_parent: Box<dyn Fn(Node) -> Option<Node>>,
 }
@@ -108,6 +114,7 @@ impl TabsterCore {
             get_window: get_window.clone(),
             internal: None,
             focused_element: None,
+            focusable: None,
             root: None,
             groupper: None,
             mover: None,
@@ -222,4 +229,20 @@ pub fn get_groupper(tabster: &Tabster) -> Arc<RefCell<GroupperAPI>> {
     }
 
     tabster_core_ref.groupper.clone().unwrap_throw()
+}
+
+/// Creates a new mover instance or returns an existing one
+/// @param tabster Tabster instance
+pub fn get_mover(tabster: &Tabster) -> Arc<RefCell<MoverAPI>> {
+    let tabster_core = tabster.core.clone();
+    let mut tabster_core_ref = tabster_core.try_borrow_mut().unwrap_throw();
+
+    if tabster_core_ref.mover.is_none() {
+        tabster_core_ref.mover = Some(Arc::new(RefCell::new(MoverAPI::new(
+            tabster_core.clone(),
+            tabster_core_ref.get_window.clone(),
+        ))));
+    }
+
+    tabster_core_ref.mover.clone().unwrap_throw()
 }

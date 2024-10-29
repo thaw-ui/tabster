@@ -1,9 +1,9 @@
 use crate::{
     tabster::TabsterCore,
-    types::{self, Visibility},
+    types::{self, GetWindow},
     utils::{DummyInputManager, TabsterPart},
 };
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use web_sys::HtmlElement;
 
 struct MoverDummyManager(DummyInputManager);
@@ -71,19 +71,34 @@ impl Mover {
 
         this
     }
+
+    pub fn id(&self) -> &String {
+        &self.part.id
+    }
 }
 
 pub struct MoverAPI {
     tabster: Arc<RefCell<TabsterCore>>,
+    win: Arc<GetWindow>,
+    movers: HashMap<String, Arc<RefCell<Mover>>>,
 }
 
 impl MoverAPI {
+    pub fn new(tabster: Arc<RefCell<TabsterCore>>, get_window: Arc<GetWindow>) -> Self {
+        // tabster.queueInit(this._init);
+        Self {
+            tabster,
+            win: get_window,
+            movers: HashMap::new(),
+        }
+    }
+
     pub fn create_mover(
-        &self,
+        &mut self,
         element: &HtmlElement,
         props: types::MoverProps,
         sys: Option<types::SysProps>,
-    ) -> Mover {
+    ) -> Arc<RefCell<Mover>> {
         let new_mover = Mover::new(
             self.tabster.clone(),
             element,
@@ -91,7 +106,10 @@ impl MoverAPI {
             props,
             sys,
         );
-        // this._movers[new_mover.id] = new_mover;
+        let id = new_mover.id().clone();
+        let new_mover = Arc::new(RefCell::new(new_mover));
+        self.movers.insert(id, new_mover.clone());
+
         new_mover
     }
 }

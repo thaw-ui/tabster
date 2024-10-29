@@ -1,4 +1,5 @@
 use crate::{
+    console_error,
     consts::TABSTER_ATTRIBUTE_NAME,
     tabster::TabsterCore,
     types::{self, TabsterAttributeOnElement, TabsterAttributeProps, TabsterOnElement},
@@ -102,17 +103,11 @@ pub fn update_tabster_by_attribute(
                     new_tabster_props_groupper.clone(),
                     sys,
                 ));
-                //         tabster.groupper.createGroupper(
-                //             element,
-                //             newTabsterProps.groupper as Types.GroupperProps,
-                //             sys
-                //         );
+            } else if cfg!(debug_assertions) {
+                console_error!(
+                    "Groupper API used before initialization, please call `getGroupper()`"
+                )
             }
-            // } else if (__DEV__) {
-            //     console.error(
-            //         "Groupper API used before initialization, please call `getGroupper()`"
-            //     );
-            // }
         }
     } else if let Some(new_tabster_props_mover) = &new_tabster_props.mover {
         let sys = new_tabster_props.sys.clone();
@@ -123,15 +118,15 @@ pub fn update_tabster_by_attribute(
             // );
         } else {
             if let Some(tabster_mover) = &tabster.mover {
-                tabster_on_element.mover =
-                    Some(tabster_mover.create_mover(&element, new_tabster_props_mover.clone(), sys))
+                let mut tabster_mover = tabster_mover.borrow_mut();
+                tabster_on_element.mover = Some(tabster_mover.create_mover(
+                    &element,
+                    new_tabster_props_mover.clone(),
+                    sys,
+                ));
             } else if cfg!(debug_assertions) {
+                console_error!("Mover API used before initialization, please call `getMover()`");
             }
-            // } else if (__DEV__) {
-            //     console.error(
-            //         "Mover API used before initialization, please call `getMover()`"
-            //     );
-            // }
         }
     }
 

@@ -29,9 +29,9 @@ impl FocusableAPI {
         Self { tabster }
     }
 
-    fn is_focusable(
+    pub fn is_focusable(
         &self,
-        el: HtmlElement,
+        el: &HtmlElement,
         include_programmatically_focusable: Option<bool>,
         no_visible_check: Option<bool>,
         no_accessible_check: Option<bool>,
@@ -202,7 +202,7 @@ impl FocusableAPI {
                 let this = self.clone();
                 Box::new(move |el| {
                     this.is_focusable(
-                        el,
+                        &el,
                         include_programmatically_focusable,
                         Some(false),
                         ignore_accessibility,

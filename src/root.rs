@@ -36,7 +36,7 @@ impl RootAPI {
         }
     }
 
-    fn auto_root_create(&mut self) -> Option<types::Root> {
+    fn auto_root_create(&mut self) -> Option<Arc<types::Root>> {
         let doc = (self.win)().document().unwrap_throw();
         let body = doc.body();
 
@@ -97,9 +97,9 @@ impl RootAPI {
             tabster.drain_init_queue();
         }
 
-        let mut root: Option<types::Root> = None;
+        let mut root: Option<Arc<types::Root>> = None;
         let mut modalizer = None::<Modalizer>;
-        let groupper = None::<Groupper>;
+        let mut groupper = None::<Arc<RefCell<Groupper>>>;
         let mover = None::<Mover>;
         let mut excluded_from_mover = false;
         let mut groupper_before_mover = None::<bool>;
@@ -173,24 +173,25 @@ impl RootAPI {
                 }
             }
 
-            if groupper.is_none()
-                && cur_groupper.is_some()
-                && (modalizer.is_none() || cur_modalizer.is_some())
-            {
-                if modalizer.is_some() {
-                    // Modalizer dominates the groupper when they are on the same node and the groupper is active.
-                    //         if (
-                    //             !curGroupper.isActive() &&
-                    //             curGroupper.getProps().tabbability &&
-                    //             modalizer.userId !== tabster.modalizer?.activeId
-                    //         ) {
-                    //             modalizer = undefined;
-                    //             groupper = curGroupper;
-                    //         }
+            if groupper.is_none() && (modalizer.is_none() || cur_modalizer.is_some()) {
+                if let Some(cur_groupper) = cur_groupper {
+                    if modalizer.is_some() {
+                        let mut cur_groupper = cur_groupper.borrow_mut();
+                        // Modalizer dominates the groupper when they are on the same node and the groupper is active.
+                        if !cur_groupper.is_active(None).unwrap_or_default() {}
+                        //         if (
+                        //             !curGroupper.isActive() &&
+                        //             curGroupper.getProps().tabbability &&
+                        //             modalizer.userId !== tabster.modalizer?.activeId
+                        //         ) {
+                        //             modalizer = undefined;
+                        //             groupper = curGroupper;
+                        //         }
 
-                    //         modalizerInGroupper = curGroupper;
-                } else {
-                    //         groupper = curGroupper;
+                        //         modalizerInGroupper = curGroupper;
+                    } else {
+                        groupper = Some(cur_groupper.clone());
+                    }
                 }
             }
 
@@ -205,9 +206,9 @@ impl RootAPI {
             //     groupperBeforeMover = !!groupper && groupper !== curGroupper;
             // }
 
-            // if (tabsterOnElement.root) {
-            //     root = tabsterOnElement.root;
-            // }
+            if let Some(tabster_on_element_root) = tabster_on_element.root.clone() {
+                root = Some(tabster_on_element_root);
+            }
 
             // if (tabsterOnElement.focusable?.ignoreKeydown) {
             //     Object.assign(

@@ -15,5 +15,6 @@ mod utils;
 mod web;
 
 pub use attribute_helpers::*;
+pub use consts::*;
 pub use focusable::FocusableAPI;
-pub use tabster::{create_tabster, get_groupper, Tabster};
+pub use tabster::{create_tabster, get_groupper, get_mover, Tabster};

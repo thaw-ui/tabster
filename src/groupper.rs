@@ -1,8 +1,8 @@
 use crate::{
     dom_api::DOM,
-    state::focused_element,
+    instance::get_tabster_on_element,
     tabster::TabsterCore,
-    types::{self, GetWindow, DOMAPI},
+    types::{self, FindFirstProps, GetWindow, DOMAPI},
     utils::{DummyInputManager, TabsterPart},
     web::set_timeout,
 };
@@ -27,6 +27,8 @@ impl GroupperDummyManager {
 
 pub struct Groupper {
     part: TabsterPart<types::GroupperProps>,
+    should_tab_inside: bool,
+    first: Option<HtmlElement>,
     dummy_manager: Option<GroupperDummyManager>,
 }
 
@@ -39,6 +41,8 @@ impl Groupper {
     ) -> Self {
         let mut this = Self {
             part: TabsterPart::new(tabster.clone(), element.clone(), props),
+            should_tab_inside: false,
+            first: None,
             dummy_manager: None,
         };
 
@@ -62,6 +66,97 @@ impl Groupper {
 
     pub fn id(&self) -> &String {
         &self.part.id
+    }
+
+    pub fn is_active(&mut self, no_if_first_is_focused: Option<bool>) -> Option<bool> {
+        let element = self.part.get_element();
+        let mut is_parent_active = true;
+
+        let mut el = element.clone();
+        loop {
+            let Some(e) = DOM::get_parent_element(el) else {
+                break;
+            };
+            if let Some(tabster_on_element) = get_tabster_on_element(self.part.tabster.clone(), &e)
+            {
+                let tabster_on_element = tabster_on_element.borrow();
+                if let Some(g) = tabster_on_element.groupper.clone() {
+                    let g = g.borrow();
+                    if !g.should_tab_inside {
+                        is_parent_active = false;
+                    }
+                }
+            }
+            el = Some(e);
+        }
+
+        let mut ret = if is_parent_active {
+            if self.part.props.tabbability.unwrap_or_default() > 0 {
+                Some(self.should_tab_inside)
+            } else {
+                Some(false)
+            }
+        } else {
+            None
+        };
+
+        if ret.unwrap_or_default() && no_if_first_is_focused.unwrap_or_default() {
+            let focused = {
+                let tabster = self.part.tabster.borrow();
+                tabster
+                    .focused_element
+                    .as_ref()
+                    .unwrap_throw()
+                    .get_focused_element()
+            };
+
+            ret = Some(focused != self.get_first(true));
+        }
+
+        ret
+    }
+
+    fn get_first(&mut self, or_container: bool) -> Option<HtmlElement> {
+        let groupper_element = self.part.get_element();
+        let mut first = None::<HtmlElement>;
+
+        if let Some(groupper_element) = self.part.get_element() {
+            let focusable = {
+                let tabster = self.part.tabster.borrow();
+                tabster.focusable.clone().unwrap_throw()
+            };
+            let mut focusable = focusable.borrow_mut();
+
+            if or_container && focusable.is_focusable(&groupper_element, None, None, None) {
+                return Some(groupper_element);
+            }
+
+            first = self.first.clone();
+
+            if first.is_none() {
+                first = focusable.find_first(
+                    FindFirstProps {
+                        container: groupper_element,
+                        // useActiveModalizer: true,
+                    },
+                    Default::default(),
+                );
+
+                if first.is_some() {
+                    self.set_first(first.clone());
+                }
+            }
+        }
+
+        first
+    }
+
+    fn set_first(&mut self, element: Option<HtmlElement>) {
+        if let Some(element) = element {
+            self.first = Some(element);
+        } else {
+            self.first = None;
+        }
     }
 }
 

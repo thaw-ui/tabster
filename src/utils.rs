@@ -13,7 +13,7 @@ use std::{
 };
 use web_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    Document, HtmlElement, Node, NodeFilter, TreeWalker,
+    Document, Element, HtmlElement, Node, NodeFilter, TreeWalker,
 };
 
 pub struct WeakHTMLElement<T, D> {
@@ -63,8 +63,9 @@ static LAST_TABSTER_PART_ID: OnceLock<RwLock<usize>> = OnceLock::new();
 
 pub struct TabsterPart<P> {
     pub id: String,
-    tabster: Arc<RefCell<TabsterCore>>,
-    props: P,
+    pub tabster: Arc<RefCell<TabsterCore>>,
+    element: HtmlElement,
+    pub props: P,
 }
 
 impl<P> TabsterPart<P> {
@@ -76,8 +77,13 @@ impl<P> TabsterPart<P> {
         Self {
             id: format!("i{}", id),
             tabster,
+            element,
             props,
         }
+    }
+
+    pub fn get_element(&self) -> Option<HtmlElement> {
+        Some(self.element.clone())
     }
 }
 
