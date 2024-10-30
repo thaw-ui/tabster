@@ -1,16 +1,18 @@
 use crate::{
     dom_api::DOM,
     instance::get_tabster_on_element,
+    keyborg::native_focus,
     root::RootAPI,
+    state::focused_element::FocusedElementState,
     tabster::TabsterCore,
     types::{self, FindFirstProps, GetWindow, DOMAPI},
-    utils::{get_dummy_input_container, DummyInputManager, TabsterPart},
+    utils::{get_adjacent_element, get_dummy_input_container, DummyInputManager, TabsterPart},
     web::set_timeout,
+    GroupperTabbabilities,
 };
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    default,
     ops::Deref,
     sync::Arc,
 };
@@ -28,16 +30,19 @@ impl GroupperDummyManager {
         tabster: Arc<RefCell<TabsterCore>>,
         sys: Option<types::SysProps>,
     ) -> Self {
-        let mut dummy_input_manager = DummyInputManager::new(tabster.clone(), element.clone(), sys);
+        let mut dummy_input_manager =
+            DummyInputManager::new(tabster.clone(), element.clone(), sys, Some(true));
         dummy_input_manager.set_handlers(
             Some(Box::new(move |dummy_input, is_backward, related_target| {
                 let container = element.clone();
                 if let Some(input) = dummy_input.input {
-                    if let Some(ctx) =
-                        RootAPI::get_tabster_context(&tabster, input.into(), Default::default())
-                    {
-                        let groupper = groupper.borrow();
-                        let next = if let Some(next_tabbable) = groupper.find_next_tabbable(
+                    if let Some(ctx) = RootAPI::get_tabster_context(
+                        &tabster,
+                        input.clone().into(),
+                        Default::default(),
+                    ) {
+                        let mut groupper = groupper.borrow_mut();
+                        let mut next = if let Some(next_tabbable) = groupper.find_next_tabbable(
                             related_target,
                             None,
                             Some(is_backward),
@@ -49,25 +54,27 @@ impl GroupperDummyManager {
                         };
 
                         if next.is_none() {
-                            //     next = FocusedElementState.findNextTabbable(
-                            //         tabster,
-                            //         ctx,
-                            //         undefined,
-                            //         dummyInput.isOutside
-                            //             ? input
-                            //             : getAdjacentElement(
-                            //                   container,
-                            //                   !isBackward
-                            //               ),
-                            //         undefined,
-                            //         isBackward,
-                            //         true
-                            //     )?.element;
+                            let current_element = if dummy_input.is_outside {
+                                Some(input)
+                            } else {
+                                get_adjacent_element(container, Some(!is_backward))
+                            };
+                            let next_tabbable = FocusedElementState::find_next_tabbable(
+                                &tabster,
+                                ctx,
+                                None,
+                                current_element,
+                                None,
+                                Some(is_backward),
+                                Some(true),
+                            );
+
+                            next = next_tabbable.map(|n| n.element).flatten()
                         }
 
-                        // if (next) {
-                        //     nativeFocus(next);
-                        // }
+                        if let Some(next) = next {
+                            native_focus(next);
+                        }
                     }
                 }
             })),
@@ -128,7 +135,7 @@ impl Groupper {
     }
 
     fn find_next_tabbable(
-        &self,
+        &mut self,
         current_element: Option<HtmlElement>,
         reference_element: Option<HtmlElement>,
         is_backward: Option<bool>,
@@ -138,83 +145,91 @@ impl Groupper {
             return None;
         };
 
-        let current_is_dummy = get_dummy_input_container(&current_element) == Some(groupper_element);
+        let current_is_dummy =
+            get_dummy_input_container(&current_element).as_ref() == Some(&groupper_element);
 
-        // if !self.should_tab_inside && current_element.is_some() && DOM::node_contains(Some(groupper_element.into), child) {
+        if !self.should_tab_inside
+            && current_element.is_some()
+            && DOM::node_contains(
+                Some(groupper_element.clone().into()),
+                Some(current_element.clone().unwrap_throw().into()),
+            )
+            && !current_is_dummy
+        {
+            return Some(types::NextTabbable {
+                element: None,
+                uncontrolled: None,
+                out_of_dom_order: Some(true),
+            });
+        }
 
-        // }
-
-        // if (
-        //     !this._shouldTabInside &&
-        //     currentElement &&
-        //     dom.nodeContains(groupperElement, currentElement) &&
-        //     !currentIsDummy
-        // ) {
-        //     return { element: undefined, outOfDOMOrder: true };
-        // }
-
-        // const groupperFirstFocusable = this.getFirst(true);
-
-        // if (
-        //     !currentElement ||
-        //     !dom.nodeContains(groupperElement, currentElement) ||
-        //     currentIsDummy
-        // ) {
-        //     return {
-        //         element: groupperFirstFocusable,
-        //         outOfDOMOrder: true,
-        //     };
-        // }
+        let groupper_first_focusable = self.get_first(true);
+        if current_element.is_none()
+            || DOM::node_contains(
+                Some(groupper_element.clone().into()),
+                Some(current_element.clone().unwrap_throw().into()),
+            )
+            || current_is_dummy
+        {
+            return Some(types::NextTabbable {
+                element: groupper_first_focusable,
+                uncontrolled: None,
+                out_of_dom_order: Some(true),
+            });
+        }
 
         // const tabster = this._tabster;
-        // let next: HTMLElement | null | undefined = null;
-        // let outOfDOMOrder = false;
-        // let uncontrolled: HTMLElement | null | undefined;
+        let mut next = None::<HtmlElement>;
+        let mut out_of_dom_order = false;
+        let mut uncontrolled = None::<HtmlElement>;
 
-        // if (this._shouldTabInside && groupperFirstFocusable) {
-        //     const findProps: Types.FindNextProps = {
-        //         container: groupperElement,
-        //         currentElement,
-        //         referenceElement,
-        //         ignoreAccessibility,
-        //         useActiveModalizer: true,
-        //     };
+        if self.should_tab_inside && groupper_first_focusable.is_some() {
+            let find_props = types::FindNextProps {
+                current_element,
+                reference_element,
+                container: groupper_element.clone(),
+                ignore_accessibility,
+                use_active_modalizer: Some(true),
+            };
+            let mut find_props_out = types::FindFocusableOutputProps::default();
 
-        //     const findPropsOut: Types.FindFocusableOutputProps = {};
+            let tabster = self.tabster.borrow();
+            let focusable = tabster.focusable.clone().unwrap_throw();
+            let mut focusable = focusable.borrow_mut();
+            next = if is_backward.unwrap_or_default() {
+                focusable.find_prev(find_props, &mut find_props_out)
+            } else {
+                focusable.find_next(find_props, &mut find_props_out)
+            };
 
-        //     next = tabster.focusable[isBackward ? "findPrev" : "findNext"](
-        //         findProps,
-        //         findPropsOut
-        //     );
+            out_of_dom_order = find_props_out.out_of_dom_order.unwrap_throw();
 
-        //     outOfDOMOrder = !!findPropsOut.outOfDOMOrder;
+            if next.is_none()
+                && self.props.tabbability == Some(*GroupperTabbabilities::LimitedTrapFocus)
+            {
+                let find_props = types::FindFirstProps {
+                    container: groupper_element,
+                    ignore_accessibility,
+                    use_active_modalizer: Some(true),
+                };
 
-        //     if (
-        //         !next &&
-        //         this._props.tabbability ===
-        //             GroupperTabbabilities.LimitedTrapFocus
-        //     ) {
-        //         next = tabster.focusable[isBackward ? "findLast" : "findFirst"](
-        //             {
-        //                 container: groupperElement,
-        //                 ignoreAccessibility,
-        //                 useActiveModalizer: true,
-        //             },
-        //             findPropsOut
-        //         );
+                next = if is_backward.unwrap_or_default() {
+                    focusable.find_last(find_props, &mut find_props_out)
+                } else {
+                    focusable.find_first(find_props, &mut find_props_out)
+                };
 
-        //         outOfDOMOrder = true;
-        //     }
+                out_of_dom_order = true;
+            }
 
-        //     uncontrolled = findPropsOut.uncontrolled;
-        // }
+            uncontrolled = find_props_out.uncontrolled;
+        }
 
-        // return {
-        //     element: next,
-        //     uncontrolled,
-        //     outOfDOMOrder,
-        // };
-        None
+        Some(types::NextTabbable {
+            element: next,
+            uncontrolled,
+            out_of_dom_order: Some(out_of_dom_order),
+        })
     }
 
     pub fn is_active(&mut self, no_if_first_is_focused: Option<bool>) -> Option<bool> {
@@ -284,9 +299,10 @@ impl Groupper {
                 first = focusable.find_first(
                     FindFirstProps {
                         container: groupper_element,
-                        // useActiveModalizer: true,
+                        ignore_accessibility: None,
+                        use_active_modalizer: Some(true),
                     },
-                    Default::default(),
+                    &mut Default::default(),
                 );
 
                 if first.is_some() {

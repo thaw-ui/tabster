@@ -4,6 +4,7 @@ use crate::{
     tabster::TabsterCore,
     types::{self, GetWindow, DOMAPI},
     web::set_timeout,
+    SysDummyInputsPositions,
 };
 use std::{
     cell::RefCell,
@@ -109,8 +110,10 @@ impl DummyInputManager {
         tabster: Arc<RefCell<TabsterCore>>,
         element: HtmlElement,
         sys: Option<types::SysProps>,
+        outside_by_default: Option<bool>,
     ) -> Self {
-        let instance = DummyInputManagerCore::new(tabster, element.clone(), sys);
+        let instance =
+            DummyInputManagerCore::new(tabster, element.clone(), sys, outside_by_default);
         Self {
             instance: Some(instance),
             on_focus_in: None,
@@ -143,12 +146,30 @@ impl DummyInputManagerCore {
         tabster: Arc<RefCell<TabsterCore>>,
         element: HtmlElement,
         sys: Option<types::SysProps>,
+        outside_by_default: Option<bool>,
     ) -> Arc<RefCell<Self>> {
+        let el = element.clone();
+
+        let forced_dummy_position = if let Some(sys) = sys.as_ref() {
+            sys.dummy_inputs_position
+        } else {
+            None
+        };
+        let tag_name = el.tag_name();
+        let is_outside = if let Some(forced_dummy_position) = forced_dummy_position {
+            forced_dummy_position == *SysDummyInputsPositions::Outside
+        } else {
+            (outside_by_default.unwrap_or_default()
+                || tag_name == "UL"
+                || tag_name == "OL"
+                || tag_name == "TABLE")
+                && !(tag_name == "LI" || tag_name == "TD" || tag_name == "TH")
+        };
+
         let tabster = tabster.borrow();
         let get_window = &tabster.get_window;
-        let first_dummy = DummyInput::new(get_window.clone());
-        let last_dummy = DummyInput::new(get_window.clone());
-        let tag_name = element.tag_name();
+        let first_dummy = DummyInput::new(get_window.clone(), is_outside);
+        let last_dummy = DummyInput::new(get_window.clone(), is_outside);
 
         let this = Arc::new(RefCell::new(Self {
             add_timer: Default::default(),
@@ -245,10 +266,11 @@ impl DummyInputManagerCore {
 
 pub struct DummyInput {
     pub input: Option<HtmlElement>,
+    pub is_outside: bool,
 }
 
 impl DummyInput {
-    fn new(get_window: Arc<GetWindow>) -> Self {
+    fn new(get_window: Arc<GetWindow>, is_outside: bool) -> Self {
         let win = get_window();
         let input: HtmlElement = win
             .document()
@@ -297,7 +319,10 @@ impl DummyInput {
         //     };
         // }
 
-        Self { input: Some(input) }
+        Self {
+            input: Some(input),
+            is_outside,
+        }
     }
 }
 
@@ -339,6 +364,31 @@ impl Deref for NodeFilterEnum {
             Self::ShowElement => &0x1,
         }
     }
+}
+
+pub fn get_adjacent_element(from: HtmlElement, prev: Option<bool>) -> Option<HtmlElement> {
+    let mut cur = Some(from);
+    let mut adjacent = None::<HtmlElement>;
+
+    loop {
+        let Some(new_cur) = cur else {
+            break;
+        };
+        if adjacent.is_some() {
+            break;
+        }
+        adjacent = if prev.unwrap_or_default() {
+            DOM::get_previous_element_sibling(Some(new_cur.clone().into()))
+                .map(|e| e.dyn_into().unwrap_throw())
+        } else {
+            DOM::get_next_element_sibling(Some(new_cur.clone().into()))
+                .map(|e| e.dyn_into().unwrap_throw())
+        };
+
+        cur = DOM::get_parent_element(Some(new_cur));
+    }
+
+    adjacent
 }
 
 pub fn get_last_child(container: HtmlElement) -> Option<HtmlElement> {

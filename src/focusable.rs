@@ -125,7 +125,7 @@ impl FocusableAPI {
     pub fn find_first(
         &mut self,
         options: FindFirstProps,
-        out: FindFocusableOutputProps,
+        out: &mut FindFocusableOutputProps,
     ) -> Option<HtmlElement> {
         self.find_element(options.into(), out)
     }
@@ -133,7 +133,7 @@ impl FocusableAPI {
     pub fn find_last(
         &mut self,
         options: FindFirstProps,
-        out: FindFocusableOutputProps,
+        out: &mut FindFocusableOutputProps,
     ) -> Option<HtmlElement> {
         self.find_element(
             FindFocusableProps {
@@ -147,7 +147,7 @@ impl FocusableAPI {
     pub fn find_next(
         &mut self,
         options: types::FindNextProps,
-        out: FindFocusableOutputProps,
+        out: &mut FindFocusableOutputProps,
     ) -> Option<HtmlElement> {
         self.find_element(options.into(), out)
     }
@@ -155,7 +155,7 @@ impl FocusableAPI {
     pub fn find_prev(
         &mut self,
         options: types::FindNextProps,
-        out: FindFocusableOutputProps,
+        out: &mut FindFocusableOutputProps,
     ) -> Option<HtmlElement> {
         self.find_element(
             FindFocusableProps {
@@ -166,14 +166,14 @@ impl FocusableAPI {
         )
     }
 
-    pub fn find_all(&mut self, options: FindAllProps, out: FindFocusableOutputProps) {
+    pub fn find_all(&mut self, options: FindAllProps, out: &mut FindFocusableOutputProps) {
         self.find_elements(true, options.into(), out);
     }
 
     fn find_element(
         &mut self,
         options: FindFocusableProps,
-        out: FindFocusableOutputProps,
+        out: &mut FindFocusableOutputProps,
     ) -> Option<HtmlElement> {
         let found = self.find_elements(false, options, out);
         found.map(|found| found[0].clone())
@@ -183,16 +183,19 @@ impl FocusableAPI {
         &mut self,
         is_find_all: bool,
         options: FindFocusableProps,
-        mut out: FindFocusableOutputProps,
+        out: &mut FindFocusableOutputProps,
     ) -> Option<Vec<HtmlElement>> {
         let FindFocusableProps {
             container,
             current_element,
             include_programmatically_focusable,
             ignore_accessibility,
+            use_active_modalizer,
+            modalizer_id,
             is_backward,
             on_element,
             accept_condition,
+            ..
         } = options;
 
         let mut elements = Vec::<HtmlElement>::new();
@@ -211,7 +214,32 @@ impl FocusableAPI {
             }
         });
 
+        let modalizer_user_id =
+            if modalizer_id.is_none() && use_active_modalizer.unwrap_or_default() {
+                let tabster = self.tabster.borrow();
+                if let Some(modalizer) = tabster.modalizer.as_ref() {
+                    modalizer.active_id.clone()
+                } else {
+                    None
+                }
+            } else {
+                if let Some(modalizer_id) = modalizer_id {
+                    Some(modalizer_id)
+                } else {
+                    let tabster_context = RootAPI::get_tabster_context(
+                        &self.tabster,
+                        container.clone().into(),
+                        Default::default(),
+                    );
+
+                    tabster_context
+                        .map(|c| c.modalizer.map(|m| m.user_id))
+                        .flatten()
+                }
+            };
+
         let accept_element_state = FocusableAcceptElementState {
+            modalizer_user_id,
             accept_condition,
             container: container.clone(),
             from: current_element.clone().unwrap_or_else(|| container.clone()),
@@ -308,7 +336,7 @@ impl FocusableAPI {
                     Some(true),
                     &mut elements,
                     &on_element,
-                    &mut out,
+                    out,
                     self.tabster.clone(),
                 )
             {
@@ -333,7 +361,7 @@ impl FocusableAPI {
                 None,
                 &mut elements,
                 &on_element,
-                &mut out,
+                out,
                 self.tabster.clone(),
             ) {
                 break;

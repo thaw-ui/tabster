@@ -292,7 +292,7 @@ impl RootAPI {
                 excluded_from_mover: Some(excluded_from_mover),
                 uncontrolled,
                 ignore_keydown: Box::new(should_ignore_keydown),
-                //           modalizer,
+                modalizer,
                 //           groupper,
                 //           mover,
                 modalizer_in_groupper,

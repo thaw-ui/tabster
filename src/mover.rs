@@ -14,7 +14,7 @@ impl MoverDummyManager {
         tabster: Arc<RefCell<TabsterCore>>,
         sys: Option<types::SysProps>,
     ) -> Self {
-        Self(DummyInputManager::new(tabster, element, sys))
+        Self(DummyInputManager::new(tabster, element, sys, None))
     }
 }
 
@@ -36,13 +36,13 @@ impl Mover {
         // this._win = tabster.getWindow;
         let visibility_tolerance = props.visibility_tolerance.unwrap_or(0.8);
 
-        // if (this._props.trackState || this._props.visibilityAware) {
+        if props.track_state.unwrap_or_default() || props.visibility_aware.unwrap_or_default() > 0 {
         //     this._intersectionObserver = new IntersectionObserver(
         //         this._onIntersection,
         //         { threshold: [0, 0.25, 0.5, 0.75, 1] }
         //     );
         //     this._observeState();
-        // }
+        }
 
         // this._onDispose = onDispose;
         // const getMemorized = () =>

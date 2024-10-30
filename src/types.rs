@@ -1,9 +1,9 @@
 use crate::{
     groupper::Groupper, modalizer::Modalizer, mover::Mover, mutation_event::observe_mutations,
-    tabster::TabsterCore,
+    tabster::TabsterCore, utils::TabsterPart,
 };
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, ops::Deref, sync::Arc};
 use web_sys::{
     wasm_bindgen::UnwrapThrowExt, Document, Element, HtmlElement, KeyboardEvent, MutationObserver,
     MutationRecord, Node, NodeFilter, TreeWalker, Window,
@@ -84,6 +84,7 @@ pub struct GetTabsterContextOptions {
 
 pub struct TabsterContext {
     pub root: Arc<Root>,
+    pub modalizer: Option<Modalizer>,
     pub groupper_before_mover: Option<bool>,
     pub modalizer_in_groupper: Option<Arc<RefCell<Groupper>>>,
     /// Whether `dir='rtl'` is set on an ancestor
@@ -93,7 +94,17 @@ pub struct TabsterContext {
     pub ignore_keydown: Box<dyn Fn(KeyboardEvent) -> bool>,
 }
 
-pub struct Root {}
+pub struct Root {
+    part: TabsterPart<RootProps>,
+}
+
+impl Deref for Root {
+    type Target = TabsterPart<RootProps>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.part
+    }
+}
 
 pub type SysDummyInputsPosition = u8;
 
@@ -105,7 +116,7 @@ pub struct SysProps {
     /// plus a default Groupper/Mover/Modalizer implementation position).
     /// Setting to true will force the dummy inputs to be always outside of the element,
     /// setting to false will force the dummy inputs to be always inside.
-    dummy_inputs_position: Option<SysDummyInputsPosition>,
+    pub dummy_inputs_position: Option<SysDummyInputsPosition>,
 }
 
 /// 0 | 1 | 2 | 4 | 3
@@ -144,7 +155,8 @@ pub struct MoverProps {
     /// uses the visibility part of the trackState prop to be able to
     /// go to first/last visible element (instead of first/last focusable
     /// element in DOM) when tabbing from outside of the mover.
-    // visibilityAware?: Visibility;
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visibility_aware: Option<Visibility>,
     /// When true, Mover will try to locate a focusable with Focusable.isDefault
     /// property as a prioritized element to focus. True by default.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -179,10 +191,18 @@ pub struct FindFocusableProps {
     pub container: HtmlElement,
     /// The elemet to start from.
     pub current_element: Option<HtmlElement>,
+    /// See `referenceElement` of GetTabsterContextOptions for description.
+    pub reference_element: Option<HtmlElement>,
     /// Includes elements that can be focused programmatically.
     pub include_programmatically_focusable: Option<bool>,
     /// Ignore accessibility check.
     pub ignore_accessibility: Option<bool>,
+    /// Take active modalizer into account when searching for elements
+    /// (the elements out of active modalizer will not be returned).
+    pub use_active_modalizer: Option<bool>,
+    /// Search withing the specified modality, null for everything outside of modalizers, string within
+    /// a specific id, undefined for search within the current application state.
+    pub modalizer_id: Option<String>,
     /// If true, find previous element instead of the next one.
     pub is_backward: Option<bool>,
     /// el: element visited.
@@ -200,8 +220,11 @@ impl From<FindFirstProps> for FindFocusableProps {
         Self {
             container: value.container,
             current_element: None,
+            reference_element: None,
             include_programmatically_focusable: None,
-            ignore_accessibility: None,
+            ignore_accessibility: value.ignore_accessibility,
+            use_active_modalizer: value.use_active_modalizer,
+            modalizer_id: None,
             is_backward: None,
             accept_condition: None,
             on_element: None,
@@ -214,8 +237,11 @@ impl From<FindNextProps> for FindFocusableProps {
         Self {
             container: value.container,
             current_element: value.current_element,
+            reference_element: value.reference_element,
             include_programmatically_focusable: None,
-            ignore_accessibility: None,
+            ignore_accessibility: value.ignore_accessibility,
+            use_active_modalizer: value.use_active_modalizer,
+            modalizer_id: None,
             is_backward: None,
             accept_condition: None,
             on_element: None,
@@ -228,8 +254,11 @@ impl From<FindAllProps> for FindFocusableProps {
         Self {
             container: value.container,
             current_element: None,
+            reference_element: None,
             include_programmatically_focusable: None,
             ignore_accessibility: None,
+            use_active_modalizer: None,
+            modalizer_id: None,
             is_backward: None,
             accept_condition: None,
             on_element: None,
@@ -240,13 +269,25 @@ impl From<FindAllProps> for FindFocusableProps {
 pub struct FindFirstProps {
     /// The container used for the search.
     pub container: HtmlElement,
+    /// Ignore accessibility check.
+    pub ignore_accessibility: Option<bool>,
+    /// Take active modalizer into account when searching for elements
+    /// (the elements out of active modalizer will not be returned).
+    pub use_active_modalizer: Option<bool>,
 }
 
 pub struct FindNextProps {
     /// The elemet to start from.
     pub current_element: Option<HtmlElement>,
+    /// See `referenceElement` of GetTabsterContextOptions for description.
+    pub reference_element: Option<HtmlElement>,
     /// The container used for the search.
     pub container: HtmlElement,
+    /// Ignore accessibility check.
+    pub ignore_accessibility: Option<bool>,
+    /// Take active modalizer into account when searching for elements
+    /// (the elements out of active modalizer will not be returned).
+    pub use_active_modalizer: Option<bool>,
 }
 
 pub struct FindAllProps {
@@ -309,6 +350,10 @@ pub trait DOMAPI {
 
     fn get_last_element_child(element: Option<Element>) -> Option<Element>;
 
+    fn get_next_element_sibling(element: Option<Element>) -> Option<Element>;
+
+    fn get_previous_element_sibling(element: Option<Element>) -> Option<Element>;
+
     fn append_child(parent: Node, child: Node) -> Node;
 
     fn insert_before(parent: Node, child: Node, reference_child: Option<Node>) -> Node;
@@ -318,6 +363,7 @@ pub type GetWindow = Box<dyn Fn() -> Window>;
 
 pub struct FocusableAcceptElementState {
     pub container: HtmlElement,
+    pub modalizer_user_id: Option<String>,
     pub from: HtmlElement,
     pub from_ctx: Option<TabsterContext>,
     pub found: Option<bool>,

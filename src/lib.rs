@@ -4,6 +4,7 @@ mod dom_api;
 mod focusable;
 mod groupper;
 mod instance;
+mod keyborg;
 mod modalizer;
 mod mover;
 mod mutation_event;

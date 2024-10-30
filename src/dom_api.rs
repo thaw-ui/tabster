@@ -58,6 +58,21 @@ impl types::DOMAPI for DOM {
         element.last_element_child()
     }
 
+    fn get_next_element_sibling(element: Option<Element>) -> Option<Element> {
+        let Some(element) = element else {
+            return None;
+        };
+
+        element.next_element_sibling()
+    }
+
+    fn get_previous_element_sibling(element: Option<Element>) -> Option<Element> {
+        let Some(element) = element else {
+            return None;
+        };
+        element.previous_element_sibling()
+    }
+
     fn append_child(parent: Node, child: Node) -> Node {
         parent.append_child(&child).unwrap_throw()
     }
