@@ -49,23 +49,23 @@ impl TabsterCoreStorage {
             data: HashMap::new(),
         }
     }
-    fn get_storage_value(&self, el: &HtmlElement) -> Option<String> {
+    fn get_storage_value(&self, el: &Node) -> Option<String> {
         let value = self.storage.get(el);
         value.as_string()
     }
-    fn get(&self, el: &HtmlElement) -> Option<Arc<RefCell<types::TabsterElementStorage>>> {
+    fn get(&self, el: &Node) -> Option<Arc<RefCell<types::TabsterElementStorage>>> {
         let value = self.get_storage_value(el)?;
         self.data.get(&value).cloned()
     }
 
-    fn set(&mut self, el: &HtmlElement, value: Arc<RefCell<types::TabsterElementStorage>>) {
+    fn set(&mut self, el: &Node, value: Arc<RefCell<types::TabsterElementStorage>>) {
         let uuid = uuid::Uuid::new_v4().to_string();
         self.storage
             .set(el, &web_sys::wasm_bindgen::JsValue::from_str(&uuid));
         self.data.insert(uuid, value);
     }
 
-    fn delete(&mut self, el: &HtmlElement) {
+    fn delete(&mut self, el: &Node) {
         if let Some(value) = self.get_storage_value(el) {
             self.data.remove(&value);
         }
@@ -195,7 +195,7 @@ impl TabsterCore {
 
     pub fn storage_entry(
         &mut self,
-        element: &HtmlElement,
+        element: &Node,
         addremove: Option<bool>,
     ) -> Option<Arc<RefCell<types::TabsterElementStorageEntry>>> {
         let mut entry = self.storage.get(element);

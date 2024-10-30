@@ -11,7 +11,7 @@ impl types::DOMAPI for DOM {
         callback: impl Fn(Vec<MutationRecord>, MutationObserver) + 'static,
     ) -> MutationObserver {
         let cb = Box::new(callback) as Box<dyn Fn(Vec<MutationRecord>, MutationObserver)>;
-        let cb = Closure::wrap(cb);
+        let cb = Closure::wrap(cb).into_js_value();
         MutationObserver::new(cb.as_ref().unchecked_ref()).unwrap_throw()
     }
 

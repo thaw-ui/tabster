@@ -1,15 +1,15 @@
 use crate::{
-    console_error,
+    console_error, console_log,
     consts::TABSTER_ATTRIBUTE_NAME,
     tabster::TabsterCore,
     types::{self, TabsterAttributeOnElement, TabsterAttributeProps, TabsterOnElement},
 };
 use std::{cell::RefCell, sync::Arc};
-use web_sys::{wasm_bindgen::UnwrapThrowExt, HtmlElement};
+use web_sys::{wasm_bindgen::UnwrapThrowExt, HtmlElement, Node};
 
 pub fn get_tabster_on_element(
     tabster: &Arc<RefCell<TabsterCore>>,
-    element: &HtmlElement,
+    element: &Node,
 ) -> Option<Arc<RefCell<types::TabsterOnElement>>> {
     let mut tabster = tabster.borrow_mut();
     let entry = tabster.storage_entry(&element, None)?;
@@ -22,6 +22,7 @@ pub fn update_tabster_by_attribute(
     element: &HtmlElement,
     dispose: Option<bool>,
 ) {
+    console_log!("fn update_tabster_by_attribute");
     let mut tabster = tabster.borrow_mut();
     let new_attr_value = if dispose.unwrap_or_default() || tabster.noop {
         None
@@ -33,19 +34,15 @@ pub fn update_tabster_by_attribute(
     let mut new_attr: Option<types::TabsterAttributeOnElement> = None;
 
     if let Some(new_attr_value) = new_attr_value {
-        let Some(entry) = entry.as_ref() else {
-            return;
-        };
-
-        let entry = entry.borrow();
-        let Some(attr) = entry.attr.as_ref() else {
-            return;
-        };
-
-        if new_attr_value == attr.string {
-            return;
+        if let Some(entry) = entry.as_ref() {
+            let entry = entry.borrow();
+            if let Some(attr) = entry.attr.as_ref() {
+                if new_attr_value == attr.string {
+                    return;
+                }
+            }
         }
-
+        
         let new_value = match serde_json::from_str::<types::TabsterAttributeProps>(&new_attr_value)
         {
             Ok(new_value) => new_value,

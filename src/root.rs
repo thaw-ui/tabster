@@ -119,10 +119,7 @@ impl RootAPI {
             if root.is_some() && check_rtl.unwrap_or_default() {
                 break;
             }
-            let tabster_on_element = get_tabster_on_element(
-                &tabster,
-                &new_cur_element.clone().dyn_into().unwrap_throw(),
-            );
+            let tabster_on_element = get_tabster_on_element(&tabster, &new_cur_element.clone());
 
             if check_rtl.unwrap_or_default() && dir_right_to_left.is_none() {
                 let dir = new_cur_element

@@ -1,4 +1,5 @@
 use crate::{
+    console_log,
     consts::TABSTER_DUMMY_INPUT_ATTRIBUTE_NAME,
     dom_api::DOM,
     tabster::TabsterCore,
@@ -23,8 +24,8 @@ pub struct WeakHTMLElement<T, D> {
 }
 
 impl<T, D: Clone> WeakHTMLElement<T, D> {
-    fn new(get_window: GetWindow, element: T, data: Option<D>) -> Self {
-        let context = get_instance_context(get_window);
+    fn new(get_window: Arc<GetWindow>, element: T, data: Option<D>) -> Self {
+        let context = get_instance_context(&get_window);
 
         // let ref: TabsterWeakRef<T>;
         // if (context.WeakRef) {
@@ -112,6 +113,7 @@ impl DummyInputManager {
         sys: Option<types::SysProps>,
         outside_by_default: Option<bool>,
     ) -> Self {
+        console_log!("DummyInputManager::new");
         let instance =
             DummyInputManagerCore::new(tabster, element.clone(), sys, outside_by_default);
         Self {
@@ -289,6 +291,7 @@ impl DummyInput {
         input.set_attribute("aria-hidden", "true").unwrap_throw();
         input.set_attribute("style", "position:fixed;width:1px;height:1px;opacity:0.001;z-index:-1;content-visibility:hidden").unwrap_throw();
 
+        console_log!("DummyInput::new");
         // makeFocusIgnored(input);
 
         // this.input = input;
@@ -336,6 +339,7 @@ pub fn create_element_tree_walker(
     }
     let node_filter = NodeFilter::new();
     let cb: Closure<dyn Fn(Node) -> u32> = Closure::new(accept_node);
+    let cb = cb.into_js_value();
     node_filter.set_accept_node(cb.as_ref().unchecked_ref());
 
     Some(DOM::create_tree_walker(
@@ -411,7 +415,8 @@ static TABSTER_INSTANCE_CONTEXT: OnceLock<RwLock<HashMap<String, Arc<InstanceCon
 
 // }
 
-struct InstanceContext {
+pub struct InstanceContext {
+    pub element_by_uid: Arc<RwLock<HashMap<String, String>>>,
     // elementByUId: { [uid: string]: WeakHTMLElement<HTMLElementWithUID> };
     // basics: InternalBasics,
     // WeakRef?: WeakRefConstructor;
@@ -428,7 +433,7 @@ struct InstanceContext {
     fake_weak_refs_started: bool,
 }
 
-pub fn get_instance_context(get_window: GetWindow) -> Arc<InstanceContext> {
+pub fn get_instance_context(get_window: &Arc<GetWindow>) -> Arc<InstanceContext> {
     // interface WindowWithUtilsConext extends Window {
     //     __tabsterInstanceContext?: InstanceContext;
     //     Promise: PromiseConstructor;
@@ -459,6 +464,7 @@ pub fn get_instance_context(get_window: GetWindow) -> Arc<InstanceContext> {
     //     fakeWeakRefs: [],
     // };
     let ctx = Arc::new(InstanceContext {
+        element_by_uid: Default::default(),
         last_container_bounding_rect_cache_id: 0,
         container_bounding_rect_cache_timer: None,
         fake_weak_refs_timer: None,

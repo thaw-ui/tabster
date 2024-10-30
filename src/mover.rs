@@ -1,4 +1,5 @@
 use crate::{
+    console_log,
     tabster::TabsterCore,
     types::{self, GetWindow},
     utils::{DummyInputManager, TabsterPart},
@@ -31,17 +32,19 @@ impl Mover {
         props: types::MoverProps,
         sys: Option<types::SysProps>,
     ) -> Self {
+        console_log!("Mover::new");
+
         // super(tabster, element, props);
 
         // this._win = tabster.getWindow;
         let visibility_tolerance = props.visibility_tolerance.unwrap_or(0.8);
 
         if props.track_state.unwrap_or_default() || props.visibility_aware.unwrap_or_default() > 0 {
-        //     this._intersectionObserver = new IntersectionObserver(
-        //         this._onIntersection,
-        //         { threshold: [0, 0.25, 0.5, 0.75, 1] }
-        //     );
-        //     this._observeState();
+            //     this._intersectionObserver = new IntersectionObserver(
+            //         this._onIntersection,
+            //         { threshold: [0, 0.25, 0.5, 0.75, 1] }
+            //     );
+            //     this._observeState();
         }
 
         // this._onDispose = onDispose;

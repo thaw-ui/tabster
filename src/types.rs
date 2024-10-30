@@ -444,7 +444,11 @@ impl InternalAPI {
     }
 
     pub fn resume_observer(&mut self, sync_state: bool) {
-        self.unobserve = Some(observe_mutations(&self.doc, self.tabster.clone()));
+        self.unobserve = Some(observe_mutations(
+            &self.doc,
+            self.tabster.clone(),
+            sync_state,
+        ));
     }
 }
 
