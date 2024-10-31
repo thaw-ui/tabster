@@ -10,13 +10,27 @@ use crate::{
     web::set_timeout,
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
-use web_sys::{js_sys::WeakMap, wasm_bindgen::UnwrapThrowExt, HtmlElement, Node, Window};
+use web_sys::{js_sys::WeakMap, wasm_bindgen::UnwrapThrowExt, Node, Window};
 
-pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
-    let tabster = TabsterCore::new(win, props);
-    Tabster::new(tabster)
+thread_local! {
+    static TABSTER_INSTANCE: RefCell<Option<Tabster>> = Default::default();
 }
 
+pub fn create_tabster(win: Window, props: TabsterCoreProps) -> Tabster {
+    TABSTER_INSTANCE.with(|instance| {
+        let mut instance = instance.borrow_mut();
+        if let Some(instance) = instance.as_ref() {
+            instance.clone()
+        } else {
+            let tabster = TabsterCore::new(win, props);
+            let tabster = Tabster::new(tabster);
+            *instance = Some(tabster.clone());
+            tabster
+        }
+    })
+}
+
+#[derive(Clone)]
 pub struct Tabster {
     pub focusable: Arc<RefCell<FocusableAPI>>,
     pub core: Arc<RefCell<TabsterCore>>,

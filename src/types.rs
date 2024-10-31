@@ -346,6 +346,8 @@ pub trait DOMAPI {
 
     fn node_contains(parent: Option<Node>, child: Option<Node>) -> bool;
 
+    fn get_first_child(node: Option<Node>) -> Option<Node>;
+
     fn get_first_element_child(element: Option<Element>) -> Option<Element>;
 
     fn get_last_element_child(element: Option<Element>) -> Option<Element>;

@@ -43,6 +43,10 @@ impl types::DOMAPI for DOM {
         parent.contains(child.as_ref())
     }
 
+    fn get_first_child(node: Option<Node>) -> Option<Node> {
+        node?.first_child()
+    }
+
     fn get_first_element_child(element: Option<Element>) -> Option<Element> {
         if let Some(element) = element {
             element.first_element_child()

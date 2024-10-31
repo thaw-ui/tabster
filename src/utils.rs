@@ -273,8 +273,8 @@ impl DummyInputManagerCore {
                 DOM::append_child(element.clone().into(), last_dummy_input.clone().into());
             }
 
-            if let Some(first_element_child) = DOM::get_first_element_child(Some(element.into())) {
-                if first_element_child != *first_dummy_input {
+            if let Some(first_element_child) = DOM::get_first_child(Some(element.into())) {
+                if first_element_child != **first_dummy_input {
                     if let Some(parent_node) = first_element_child.parent_node() {
                         DOM::insert_before(
                             parent_node,
