@@ -58,6 +58,10 @@ impl types::DOMAPI for DOM {
         element.last_element_child()
     }
 
+    fn get_next_sibling(node: Option<Node>) -> Option<Node> {
+        node?.next_sibling()
+    }
+
     fn get_next_element_sibling(element: Option<Element>) -> Option<Element> {
         let Some(element) = element else {
             return None;

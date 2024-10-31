@@ -350,6 +350,8 @@ pub trait DOMAPI {
 
     fn get_last_element_child(element: Option<Element>) -> Option<Element>;
 
+    fn get_next_sibling(node: Option<Node>) -> Option<Node>;
+
     fn get_next_element_sibling(element: Option<Element>) -> Option<Element>;
 
     fn get_previous_element_sibling(element: Option<Element>) -> Option<Element>;

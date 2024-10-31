@@ -23,14 +23,14 @@ pub fn update_tabster_by_attribute(
     dispose: Option<bool>,
 ) {
     console_log!("fn update_tabster_by_attribute");
-    let mut tabster = tabster.borrow_mut();
-    let new_attr_value = if dispose.unwrap_or_default() || tabster.noop {
+    let mut tabster_ref = tabster.borrow_mut();
+    let new_attr_value = if dispose.unwrap_or_default() || tabster_ref.noop {
         None
     } else {
         element.get_attribute(TABSTER_ATTRIBUTE_NAME)
     };
 
-    let entry = tabster.storage_entry(&element, None);
+    let entry = tabster_ref.storage_entry(&element, None);
     let mut new_attr: Option<types::TabsterAttributeOnElement> = None;
 
     if let Some(new_attr_value) = new_attr_value {
@@ -42,7 +42,7 @@ pub fn update_tabster_by_attribute(
                 }
             }
         }
-        
+
         let new_value = match serde_json::from_str::<types::TabsterAttributeProps>(&new_attr_value)
         {
             Ok(new_value) => new_value,
@@ -65,7 +65,9 @@ pub fn update_tabster_by_attribute(
     let entry = if let Some(entry) = entry {
         entry
     } else {
-        tabster.storage_entry(&element, Some(true)).unwrap_throw()
+        tabster_ref
+            .storage_entry(&element, Some(true))
+            .unwrap_throw()
     };
 
     {
@@ -93,9 +95,11 @@ pub fn update_tabster_by_attribute(
             //     newTabsterProps.groupper as Types.GroupperProps
             // );
         } else {
-            if let Some(tabster_groupper) = &tabster.groupper {
-                let mut tabster_groupper = tabster_groupper.borrow_mut();
-                tabster_on_element.groupper = Some(tabster_groupper.create_groupper(
+            let groupper = tabster_ref.groupper.clone();
+            drop(tabster_ref);
+            if let Some(groupper) = groupper {
+                let mut groupper = groupper.borrow_mut();
+                tabster_on_element.groupper = Some(groupper.create_groupper(
                     &element,
                     new_tabster_props_groupper.clone(),
                     sys,
@@ -114,13 +118,12 @@ pub fn update_tabster_by_attribute(
             //     newTabsterProps.mover as Types.MoverProps
             // );
         } else {
-            if let Some(tabster_mover) = &tabster.mover {
-                let mut tabster_mover = tabster_mover.borrow_mut();
-                tabster_on_element.mover = Some(tabster_mover.create_mover(
-                    &element,
-                    new_tabster_props_mover.clone(),
-                    sys,
-                ));
+            let mover = tabster_ref.mover.clone();
+            drop(tabster_ref);
+            if let Some(mover) = mover {
+                let mut mover = mover.borrow_mut();
+                tabster_on_element.mover =
+                    Some(mover.create_mover(&element, new_tabster_props_mover.clone(), sys));
             } else if cfg!(debug_assertions) {
                 console_error!("Mover API used before initialization, please call `getMover()`");
             }
@@ -135,6 +138,7 @@ pub fn update_tabster_by_attribute(
             entry.tabster = None;
             entry.attr = None;
         }
-        tabster.storage_entry(&element, Some(false));
+        let mut tabster_ref = tabster.borrow_mut();
+        tabster_ref.storage_entry(&element, Some(false));
     }
 }

@@ -1,4 +1,5 @@
 use crate::{
+    console_log,
     dom_api::DOM,
     focusable::FocusableAPI,
     groupper::GroupperAPI,
@@ -234,10 +235,12 @@ pub fn get_groupper(tabster: &Tabster) -> Arc<RefCell<GroupperAPI>> {
 /// Creates a new mover instance or returns an existing one
 /// @param tabster Tabster instance
 pub fn get_mover(tabster: &Tabster) -> Arc<RefCell<MoverAPI>> {
+    console_log!("get_mover");
     let tabster_core = tabster.core.clone();
     let mut tabster_core_ref = tabster_core.try_borrow_mut().unwrap_throw();
 
     if tabster_core_ref.mover.is_none() {
+        console_log!("get_mover is_none");
         tabster_core_ref.mover = Some(Arc::new(RefCell::new(MoverAPI::new(
             tabster_core.clone(),
             tabster_core_ref.get_window.clone(),

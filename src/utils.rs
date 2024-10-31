@@ -177,7 +177,7 @@ impl DummyInputManagerCore {
             add_timer: Default::default(),
             get_window: get_window.clone(),
             element: Some(element),
-            is_outside: false,
+            is_outside,
             first_dummy: Some(first_dummy),
             last_dummy: Some(last_dummy),
         }));
@@ -243,23 +243,45 @@ impl DummyInputManagerCore {
         let Some(last_dummy_input) = last_dummy_input else {
             return;
         };
-        // if (this._isOutside) {
-        // }
+        if self.is_outside {
+            let element_parent = DOM::get_parent_node(Some(element.clone().into()));
+            if let Some(element_parent) = element_parent {
+                let next_sibling = DOM::get_next_sibling(Some(element.clone().into()));
 
-        if DOM::get_last_element_child(Some(element.clone().dyn_into().unwrap_throw()))
-            != Some(last_dummy_input.clone().dyn_into().unwrap_throw())
-        {
-            DOM::append_child(element.clone().into(), last_dummy_input.clone().into());
-        }
-
-        if let Some(first_element_child) = DOM::get_first_element_child(Some(element.into())) {
-            if first_element_child != *first_dummy_input {
-                if let Some(parent_node) = first_element_child.parent_node() {
+                if next_sibling != Some(last_dummy_input.clone().into()) {
                     DOM::insert_before(
-                        parent_node,
-                        first_dummy_input.into(),
-                        Some(first_element_child.into()),
+                        element_parent.clone(),
+                        last_dummy_input.into(),
+                        next_sibling,
                     );
+                }
+
+                if DOM::get_previous_element_sibling(Some(element.clone().into()))
+                    != Some(first_dummy_input.clone().into())
+                {
+                    DOM::insert_before(
+                        element_parent,
+                        first_dummy_input.into(),
+                        Some(element.into()),
+                    );
+                }
+            }
+        } else {
+            if DOM::get_last_element_child(Some(element.clone().dyn_into().unwrap_throw()))
+                != Some(last_dummy_input.clone().dyn_into().unwrap_throw())
+            {
+                DOM::append_child(element.clone().into(), last_dummy_input.clone().into());
+            }
+
+            if let Some(first_element_child) = DOM::get_first_element_child(Some(element.into())) {
+                if first_element_child != *first_dummy_input {
+                    if let Some(parent_node) = first_element_child.parent_node() {
+                        DOM::insert_before(
+                            parent_node,
+                            first_dummy_input.into(),
+                            Some(first_element_child.into()),
+                        );
+                    }
                 }
             }
         }
