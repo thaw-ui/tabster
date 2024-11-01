@@ -80,7 +80,7 @@ impl RootAPI {
     /// returns: None if the element is not a child of a tabster root, otherwise all applicable tabster behaviours and configurations
     pub fn get_tabster_context(
         tabster: &Arc<RefCell<TabsterCore>>,
-        element: Node,
+        element: &Node,
         options: GetTabsterContextOptions,
     ) -> Option<types::TabsterContext> {
         if element.owner_document().is_none() {
@@ -101,7 +101,7 @@ impl RootAPI {
         }
 
         let mut root: Option<Arc<types::Root>> = None;
-        let mut modalizer = None::<Modalizer>;
+        let mut modalizer = None::<Arc<Modalizer>>;
         let mut groupper = None::<Arc<RefCell<Groupper>>>;
         let mut mover = None::<Arc<RefCell<Mover>>>;
         let mut excluded_from_mover = false;
@@ -288,10 +288,10 @@ impl RootAPI {
                     .then(|| dir_right_to_left.unwrap_or_default()),
                 excluded_from_mover: Some(excluded_from_mover),
                 uncontrolled,
-                ignore_keydown: Box::new(should_ignore_keydown),
+                ignore_keydown: Arc::new(should_ignore_keydown),
                 modalizer,
-                //           groupper,
-                //           mover,
+                groupper,
+                mover,
                 modalizer_in_groupper,
             })
         } else {

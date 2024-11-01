@@ -15,7 +15,7 @@ use std::{
 };
 use web_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    Document, HtmlElement, Node, NodeFilter, TreeWalker,
+    Document, Element, HtmlElement, Node, NodeFilter, TreeWalker,
 };
 
 pub struct WeakHTMLElement<T, D> {
@@ -59,6 +59,11 @@ impl<T, D: Clone> WeakHTMLElement<T, D> {
     fn get_data(&self) -> Option<D> {
         self.data.clone()
     }
+}
+
+pub fn should_ignore_focus(element: &Element) -> bool {
+    false
+    // return !!(element as FocusedElementWithIgnoreFlag).__shouldIgnoreFocus;
 }
 
 static LAST_TABSTER_PART_ID: OnceLock<RwLock<usize>> = OnceLock::new();
@@ -511,29 +516,36 @@ pub fn get_instance_context(get_window: &Arc<GetWindow>) -> Arc<InstanceContext>
 //     return new (ctx?.basics.WeakMap || WeakMap)();
 // }
 
-pub fn matches_selector(element: HtmlElement, selector: String) -> bool {
-    element.matches(&selector).unwrap_throw()
+pub fn matches_selector(element: &Element, selector: &str) -> bool {
+    element.matches(selector).unwrap_throw()
 }
 
-pub fn is_display_none(element: HtmlElement) -> bool {
+pub fn is_display_none(element: Element) -> bool {
     let element_document = element.owner_document().unwrap_throw();
 
-    let computed_style = {
-        let Some(default_view) = element_document.default_view() else {
-            return false;
-        };
+    let computed_style = if let Some(default_view) = element_document.default_view() {
         default_view.get_computed_style(&element).unwrap_throw()
+    } else {
+        None
     };
 
     // offsetParent is null for elements with display:none, display:fixed and for <body>.
-    if element.offset_parent().is_none()
-        && element_document.body().as_ref() != Some(&element)
-        && computed_style
-            .as_ref()
-            .map(|c| c.get_property_value("position").unwrap_throw())
-            != Some("fixed".into())
+    if element.clone().dyn_into::<HtmlElement>().is_err()
+        || element
+            .clone()
+            .dyn_into::<HtmlElement>()
+            .unwrap_throw()
+            .offset_parent()
+            .is_none()
     {
-        return true;
+        if element_document.body().map(|e| e.into()) != Some(element.clone())
+            && computed_style
+                .as_ref()
+                .map(|c| c.get_property_value("position").unwrap_throw())
+                != Some("fixed".into())
+        {
+            return true;
+        }
     }
 
     // For our purposes of looking for focusable elements, visibility:hidden has the same
@@ -561,18 +573,18 @@ pub fn is_display_none(element: HtmlElement) -> bool {
             return true;
         }
 
-        let Some(parent_element) = element.parent_element() else {
-            return false;
-        };
-
-        let Ok(parent_element) = parent_element.dyn_into::<HtmlElement>() else {
-            return false;
-        };
-
-        if parent_element.offset_parent().is_none()
-            && element_document.body().map(|b| b.into()) != element.parent_element()
+        if element.parent_element().is_none()
+            || element
+                .parent_element()
+                .unwrap_throw()
+                .dyn_into::<HtmlElement>()
+                .unwrap_throw()
+                .offset_parent()
+                .is_none()
         {
-            return true;
+            if element_document.body().map(|b| b.into()) != element.parent_element() {
+                return true;
+            }
         }
     }
 
@@ -582,7 +594,7 @@ pub fn is_display_none(element: HtmlElement) -> bool {
 /// If the passed element is Tabster dummy input, returns the container element this dummy input belongs to.
 /// element: Element to check for being dummy input.
 /// returns: Dummy input container element (if the passed element is a dummy input) or null.
-pub fn get_dummy_input_container(element: &Option<HtmlElement>) -> Option<HtmlElement> {
+pub fn get_dummy_input_container(element: &Option<Element>) -> Option<HtmlElement> {
     // return (
     //     (
     //         element as HTMLElementWithDummyContainer | null | undefined

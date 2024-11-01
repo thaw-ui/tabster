@@ -36,11 +36,9 @@ impl GroupperDummyManager {
             Some(Box::new(move |dummy_input, is_backward, related_target| {
                 let container = element.clone();
                 if let Some(input) = dummy_input.input {
-                    if let Some(ctx) = RootAPI::get_tabster_context(
-                        &tabster,
-                        input.clone().into(),
-                        Default::default(),
-                    ) {
+                    if let Some(ctx) =
+                        RootAPI::get_tabster_context(&tabster, &input, Default::default())
+                    {
                         let mut groupper = groupper.borrow_mut();
                         let mut next = if let Some(next_tabbable) = groupper.find_next_tabbable(
                             related_target,
@@ -146,7 +144,8 @@ impl Groupper {
         };
 
         let current_is_dummy =
-            get_dummy_input_container(&current_element).as_ref() == Some(&groupper_element);
+            get_dummy_input_container(&current_element.clone().map(|e| e.into())).as_ref()
+                == Some(&groupper_element);
 
         if !self.should_tab_inside
             && current_element.is_some()

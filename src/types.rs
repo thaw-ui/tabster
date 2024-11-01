@@ -1,9 +1,17 @@
 use crate::{
-    groupper::Groupper, modalizer::Modalizer, mover::Mover, mutation_event::observe_mutations,
-    tabster::TabsterCore, utils::TabsterPart,
+    groupper::Groupper,
+    modalizer::Modalizer,
+    mover::Mover,
+    mutation_event::observe_mutations,
+    tabster::TabsterCore,
+    utils::{NodeFilterEnum, TabsterPart},
 };
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, ops::Deref, sync::Arc};
+use std::{
+    cell::{RefCell, RefMut},
+    ops::Deref,
+    sync::Arc,
+};
 use web_sys::{
     wasm_bindgen::UnwrapThrowExt, Document, Element, HtmlElement, KeyboardEvent, MutationObserver,
     MutationRecord, Node, NodeFilter, TreeWalker, Window,
@@ -82,16 +90,19 @@ pub struct GetTabsterContextOptions {
     pub reference_element: Option<HtmlElement>,
 }
 
+#[derive(Clone)]
 pub struct TabsterContext {
     pub root: Arc<Root>,
-    pub modalizer: Option<Modalizer>,
+    pub modalizer: Option<Arc<Modalizer>>,
+    pub groupper: Option<Arc<RefCell<Groupper>>>,
+    pub mover: Option<Arc<RefCell<Mover>>>,
     pub groupper_before_mover: Option<bool>,
     pub modalizer_in_groupper: Option<Arc<RefCell<Groupper>>>,
     /// Whether `dir='rtl'` is set on an ancestor
     pub rtl: Option<bool>,
     pub excluded_from_mover: Option<bool>,
     pub uncontrolled: Option<HtmlElement>,
-    pub ignore_keydown: Box<dyn Fn(KeyboardEvent) -> bool>,
+    pub ignore_keydown: Arc<dyn Fn(KeyboardEvent) -> bool>,
 }
 
 pub struct Root {
@@ -170,11 +181,11 @@ pub struct MoverProps {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visibility_tolerance: Option<f32>,
 }
-
-pub struct ModalizerAPI {
-    pub active_id: Option<String>,
-    pub is_augmented: Box<dyn Fn(HtmlElement) -> bool>,
+pub struct ModalizerProps {
+    pub is_always_accessible: Option<bool>,
 }
+
+
 
 #[derive(Debug, Default)]
 pub struct FindFocusableOutputProps {
@@ -368,6 +379,7 @@ pub type GetWindow = Box<dyn Fn() -> Window>;
 pub struct FocusableAcceptElementState {
     pub container: HtmlElement,
     pub modalizer_user_id: Option<String>,
+    pub current_ctx: Option<TabsterContext>,
     pub from: HtmlElement,
     pub from_ctx: Option<TabsterContext>,
     pub found: Option<bool>,
@@ -375,6 +387,8 @@ pub struct FocusableAcceptElementState {
     pub found_backward: Option<HtmlElement>,
     pub reject_elements_from: Option<HtmlElement>,
     pub accept_condition: Box<dyn Fn(HtmlElement) -> bool>,
+    pub has_custom_condition: Option<bool>,
+    pub ignore_accessibility: Option<bool>,
     /// A flag that indicates that some focusable elements were skipped
     /// during the search and the found element is not the one the browser
     /// would normally focus if the user pressed Tab.
@@ -391,7 +405,7 @@ pub struct TabsterOnElement {
     pub root: Option<Arc<Root>>,
     pub mover: Option<Arc<RefCell<Mover>>>,
     pub groupper: Option<Arc<RefCell<Groupper>>>,
-    pub modalizer: Option<Modalizer>,
+    pub modalizer: Option<Arc<Modalizer>>,
     pub focusable: Option<Arc<FocusableProps>>,
     pub uncontrolled: Option<UncontrolledProps>,
 }

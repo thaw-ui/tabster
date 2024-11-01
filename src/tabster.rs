@@ -1,13 +1,5 @@
 use crate::{
-    console_log,
-    dom_api::DOM,
-    focusable::FocusableAPI,
-    groupper::GroupperAPI,
-    mover::MoverAPI,
-    root::{RootAPI, WindowWithTabsterInstance},
-    state::focused_element::FocusedElementState,
-    types::{self, GetWindow, TabsterCoreProps, DOMAPI},
-    web::set_timeout,
+    console_log, dom_api::DOM, focusable::FocusableAPI, groupper::GroupperAPI, modalizer::ModalizerAPI, mover::MoverAPI, root::{RootAPI, WindowWithTabsterInstance}, state::focused_element::FocusedElementState, types::{self, GetWindow, TabsterCoreProps, DOMAPI}, web::set_timeout
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use web_sys::{js_sys::WeakMap, wasm_bindgen::UnwrapThrowExt, Node, Window};
@@ -107,7 +99,7 @@ pub struct TabsterCore {
     // Extended APIs
     pub groupper: Option<Arc<RefCell<GroupperAPI>>>,
     pub mover: Option<Arc<RefCell<MoverAPI>>>,
-    pub modalizer: Option<types::ModalizerAPI>,
+    pub modalizer: Option<ModalizerAPI>,
     pub get_parent: Box<dyn Fn(Node) -> Option<Node>>,
 }
 

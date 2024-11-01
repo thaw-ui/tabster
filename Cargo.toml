@@ -23,6 +23,7 @@ web-sys = { version = "0.3.70", features = [
     "MutationObserver",
     "MutationObserverInit",
     "MutationRecord",
+    "SvgElement",
     "console",
 ] }
 uuid = { version = "1.11.0", features = ["v4", "js"] }

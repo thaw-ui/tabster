@@ -10,13 +10,13 @@ use crate::{
     },
     utils::{
         create_element_tree_walker, get_dummy_input_container, get_last_child, is_display_none,
-        matches_selector, NodeFilterEnum,
+        matches_selector, should_ignore_focus, NodeFilterEnum,
     },
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
-    HtmlElement, Node,
+    Element, HtmlElement, Node, SvgElement,
 };
 
 #[derive(Clone)]
@@ -31,26 +31,35 @@ impl FocusableAPI {
 
     pub fn is_focusable(
         &self,
-        el: &HtmlElement,
+        el: &Element,
         include_programmatically_focusable: Option<bool>,
         no_visible_check: Option<bool>,
         no_accessible_check: Option<bool>,
     ) -> bool {
-        if matches_selector(el.clone(), FOCUSABLE_SELECTOR.to_string())
-            && (include_programmatically_focusable.unwrap_or_default() || el.tab_index() != -1)
+        fn tab_index(el: &Element) -> i32 {
+            if let Ok(el) = el.clone().dyn_into::<HtmlElement>() {
+                el.tab_index()
+            } else if let Ok(el) = el.clone().dyn_into::<SvgElement>() {
+                el.tab_index()
+            } else {
+                unreachable!()
+            }
+        }
+        if matches_selector(&el, FOCUSABLE_SELECTOR)
+            && (include_programmatically_focusable.unwrap_or_default() || tab_index(el) != -1)
         {
-            (no_visible_check.unwrap_or_default() || FocusableAPI::is_visible(el.clone()))
-                && (no_accessible_check.unwrap_or_default() || self.is_accessible(el.clone()))
+            (no_visible_check.unwrap_or_default() || FocusableAPI::is_visible(el))
+                && (no_accessible_check.unwrap_or_default() || self.is_accessible(el))
         } else {
             false
         }
     }
 
-    fn is_visible(el: HtmlElement) -> bool {
+    fn is_visible(el: &Element) -> bool {
         let Some(owner_document) = el.owner_document() else {
             return false;
         };
-        if el.owner_document().is_none() || el.node_type() != Node::ELEMENT_NODE {
+        if el.node_type() != Node::ELEMENT_NODE {
             return false;
         }
 
@@ -68,11 +77,11 @@ impl FocusableAPI {
             return false;
         }
 
-        return true;
+        true
     }
 
-    fn is_accessible(&self, el: HtmlElement) -> bool {
-        let mut e = Some(el);
+    fn is_accessible(&self, el: &Element) -> bool {
+        let mut e = Some(el.clone());
         loop {
             let Some(e_ref) = e.as_ref() else {
                 break;
@@ -80,7 +89,7 @@ impl FocusableAPI {
 
             let tabster_on_element = get_tabster_on_element(&self.tabster, e_ref);
 
-            if self.is_hidden(e_ref.clone()) {
+            if self.is_hidden(e_ref) {
                 return false;
             }
             let Some(tabster_on_element) = tabster_on_element else {
@@ -95,17 +104,17 @@ impl FocusableAPI {
                 return false;
             }
 
-            e = DOM::get_parent_element(e.clone());
+            e = e.map(|e| e.parent_element()).flatten();
         }
 
         true
     }
 
-    fn is_disabled(el: &HtmlElement) -> bool {
+    fn is_disabled(el: &Element) -> bool {
         el.has_attribute("disabled")
     }
 
-    fn is_hidden(&self, el: HtmlElement) -> bool {
+    fn is_hidden(&self, el: &Element) -> bool {
         let Some(attr_val) = el.get_attribute("aria-hidden") else {
             return false;
         };
@@ -226,21 +235,21 @@ impl FocusableAPI {
                 if let Some(modalizer_id) = modalizer_id {
                     Some(modalizer_id)
                 } else {
-                    let tabster_context = RootAPI::get_tabster_context(
-                        &self.tabster,
-                        container.clone().into(),
-                        Default::default(),
-                    );
+                    let tabster_context =
+                        RootAPI::get_tabster_context(&self.tabster, &container, Default::default());
 
                     tabster_context
-                        .map(|c| c.modalizer.map(|m| m.user_id))
+                        .map(|c| c.modalizer.map(|m| m.user_id.clone()))
                         .flatten()
                 }
             };
 
         let accept_element_state = FocusableAcceptElementState {
             modalizer_user_id,
+            current_ctx: None,
             accept_condition,
+            has_custom_condition: None,
+            ignore_accessibility,
             container: container.clone(),
             from: current_element.clone().unwrap_or_else(|| container.clone()),
             from_ctx: None,
@@ -254,8 +263,9 @@ impl FocusableAPI {
         let Some(walker) =
             create_element_tree_walker(&container.owner_document().unwrap_throw(), &container, {
                 let accept_element_state = accept_element_state.clone();
+                let this = self.clone();
                 move |node| {
-                    Self::accept_element(node.dyn_into().unwrap_throw(), &accept_element_state)
+                    this.accept_element(node.dyn_into().unwrap_throw(), &accept_element_state)
                 }
             })
         else {
@@ -305,7 +315,7 @@ impl FocusableAPI {
                     if let Some(found_element) = found_element {
                         out.uncontrolled = RootAPI::get_tabster_context(
                             &tabster,
-                            found_element.into(),
+                            &found_element,
                             Default::default(),
                         )
                         .and_then(|ctx| ctx.uncontrolled);
@@ -330,7 +340,7 @@ impl FocusableAPI {
             let Some(last_child) = get_last_child(container) else {
                 return None;
             };
-            if Self::accept_element(last_child.clone(), &accept_element_state)
+            if self.accept_element(last_child.clone().into(), &accept_element_state)
                 == *NodeFilterEnum::FilterAccept
                 && !prepare_for_next_element(
                     Some(true),
@@ -381,7 +391,8 @@ impl FocusableAPI {
     }
 
     fn accept_element(
-        element: HtmlElement,
+        &self,
+        element: Element,
         state: &Arc<RefCell<FocusableAcceptElementState>>,
     ) -> u32 {
         let mut state = state.try_borrow_mut().unwrap_throw();
@@ -392,7 +403,7 @@ impl FocusableAPI {
         let found_backward = state.found_backward.clone();
 
         if found_backward.is_some()
-            && (Some(&element) == found_backward.as_ref()
+            && (Some(&element) == found_backward.as_deref()
                 || !DOM::node_contains(
                     found_backward.clone().map(|f| f.into()),
                     Some(element.clone().into()),
@@ -405,7 +416,7 @@ impl FocusableAPI {
 
         let container = state.container.clone();
 
-        if element == container {
+        if element == *container {
             return *NodeFilterEnum::FilterSkip;
         }
 
@@ -424,14 +435,107 @@ impl FocusableAPI {
             return *NodeFilterEnum::FilterReject;
         }
 
+        state.current_ctx =
+            RootAPI::get_tabster_context(&self.tabster, &element, Default::default());
+        // Tabster is opt in, if it is not managed, don't try and get do anything special
+        let Some(ctx) = state.current_ctx.clone() else {
+            return *NodeFilterEnum::FilterSkip;
+        };
+
+        if should_ignore_focus(&element) {
+            if self.is_focusable(
+                &element.clone().dyn_into().unwrap_throw(),
+                None,
+                Some(true),
+                Some(true),
+            ) {
+                state.skipped_focusable = Some(true);
+            }
+
+            return *NodeFilterEnum::FilterSkip;
+        }
+
+        // We assume iframes are focusable because native tab behaviour would tab inside.
+        // But we do it only during the standard search when there is no custom accept
+        // element condition.
+        if !state.has_custom_condition.unwrap_or_default()
+            && (element.tag_name() == "IFRAME" || element.tag_name() == "WEBVIEW")
+        {
+            let user_id = if let Some(modalizer) = &ctx.modalizer {
+                Some(modalizer.user_id.clone())
+            } else {
+                None
+            };
+            let active_id = {
+                let tabster = self.tabster.borrow();
+                if let Some(modalizer) = &tabster.modalizer {
+                    modalizer.active_id.clone()
+                } else {
+                    None
+                }
+            };
+
+            if user_id == active_id {
+                state.found = Some(true);
+                let element: HtmlElement = element.clone().dyn_into().unwrap_throw();
+                state.found_element = Some(element.clone());
+                state.reject_elements_from = Some(element);
+
+                return *NodeFilterEnum::FilterAccept;
+            } else {
+                return *NodeFilterEnum::FilterReject;
+            }
+        }
+
+        if !state.ignore_accessibility.unwrap_or_default() && !self.is_accessible(&element) {
+            if self.is_focusable(&element, Some(false), Some(true), Some(true)) {
+                state.skipped_focusable = Some(true);
+            }
+
+            return *NodeFilterEnum::FilterReject;
+        }
+
         let mut result = None::<u32>;
 
+        let from_ctx = if let Some(from_ctx) = state.from_ctx.clone() {
+            Some(from_ctx)
+        } else {
+            let from_ctx =
+                RootAPI::get_tabster_context(&self.tabster, &state.from, Default::default());
+            state.from_ctx = from_ctx.clone();
+            from_ctx
+        };
+
+        let from_mover = from_ctx.clone().map(|c| c.mover).flatten();
+        let groupper = ctx.groupper;
+        let mover = ctx.mover;
+
+        result = {
+            let tabster = self.tabster.borrow();
+            if let Some(modalizer) = &tabster.modalizer {
+                modalizer.accept_element(&element, &mut state)
+            } else {
+                None
+            }
+        };
+
+        if result.is_some() {
+            state.skipped_focusable = Some(true);
+        }
+
         if result.is_none() {
-            result = if (state.accept_condition)(element) {
+            result = if (state.accept_condition)(element.dyn_into().unwrap_throw()) {
                 Some(*NodeFilterEnum::FilterAccept)
             } else {
                 Some(*NodeFilterEnum::FilterSkip)
-            }
+            };
+
+            // if (
+            //     result === NodeFilter.FILTER_SKIP &&
+            //     this.isFocusable(element, false, true, true)
+            // ) {
+            //     state.skippedFocusable = true;
+            // }
         }
 
         result.unwrap()
