@@ -1,7 +1,8 @@
 use crate::types;
 use web_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    Document, Element, MutationObserver, MutationRecord, Node, NodeFilter, TreeWalker,
+    Document, Element, HtmlElement, MutationObserver, MutationRecord, Node, NodeFilter, NodeList,
+    TreeWalker,
 };
 
 pub struct DOM;
@@ -89,5 +90,12 @@ impl types::DOMAPI for DOM {
         parent
             .insert_before(&child, reference_child.as_ref())
             .unwrap_throw()
+    }
+
+    fn get_elements_by_name(reference_element: &HtmlElement, name: &str) -> NodeList {
+        reference_element
+            .owner_document()
+            .unwrap_throw()
+            .get_elements_by_name(name)
     }
 }

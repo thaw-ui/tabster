@@ -5,20 +5,23 @@ use crate::{
     root::RootAPI,
     state::focused_element::FocusedElementState,
     tabster::TabsterCore,
-    types::{self, FindFirstProps, GetWindow, DOMAPI},
-    utils::{get_adjacent_element, get_dummy_input_container, DummyInputManager, TabsterPart},
+    types::{self, CachedGroupper, FindFirstProps, GetWindow, DOMAPI},
+    utils::{
+        get_adjacent_element, get_dummy_input_container, DummyInputManager, NodeFilterEnum,
+        TabsterPart,
+    },
     web::set_timeout,
     GroupperTabbabilities,
 };
 use std::{
-    cell::RefCell,
+    cell::{RefCell, RefMut},
     collections::{HashMap, HashSet},
     ops::Deref,
     sync::Arc,
 };
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
-    HtmlElement,
+    Element, HtmlElement,
 };
 
 struct GroupperDummyManager(DummyInputManager);
@@ -319,6 +322,135 @@ impl Groupper {
         } else {
             self.first = None;
         }
+    }
+
+    fn get_is_active(
+        &mut self,
+        state: &mut RefMut<'_, types::FocusableAcceptElementState>,
+        groupper_id: &str,
+    ) -> Option<bool> {
+        let cached = state.cached_grouppers.get(groupper_id);
+        let is_active: Option<bool>;
+
+        if let Some(cached) = cached {
+            is_active = cached.is_active;
+        } else {
+            is_active = self.is_active(Some(true));
+
+            state.cached_grouppers.insert(
+                groupper_id.to_string(),
+                CachedGroupper {
+                    is_active,
+                    first: None,
+                },
+            );
+        }
+
+        is_active
+    }
+
+    pub fn accept_element(
+        &mut self,
+        element: &Element,
+        state: &mut RefMut<'_, types::FocusableAcceptElementState>,
+    ) -> Option<u32> {
+        let parent_element = DOM::get_parent_element(self.get_element());
+        let parent_ctx = if let Some(parent_element) = &parent_element {
+            RootAPI::get_tabster_context(&self.tabster, &parent_element, Default::default())
+        } else {
+            None
+        };
+
+        let mut parent_ctx_groupper = None;
+        let mut parent_groupper = None;
+        if let Some(parent_ctx) = &parent_ctx {
+            parent_ctx_groupper = parent_ctx.groupper.clone();
+            if parent_ctx.groupper_before_mover.unwrap_or_default() {
+                parent_groupper = parent_ctx_groupper.clone();
+            }
+        }
+
+        let mut parent_groupper_element = None::<HtmlElement>;
+
+        if let Some(parent_groupper) = &parent_groupper {
+            let parent_groupper = parent_groupper.borrow();
+            parent_groupper_element = parent_groupper.get_element();
+
+            let is_active = { self.get_is_active(state, &parent_groupper.id) };
+            if !is_active.unwrap_or_default()
+                && parent_groupper_element.is_some()
+                && Some(state.container.clone()) != parent_groupper_element
+                && DOM::node_contains(
+                    Some(state.container.clone().into()),
+                    parent_groupper_element.clone().map(|el| el.into()),
+                )
+            {
+                // Do not fall into a child groupper of inactive parent groupper if it's in the scope of the search.
+                state.skipped_focusable = Some(true);
+                return Some(*NodeFilterEnum::FilterReject);
+            }
+        }
+
+        let is_active = self.get_is_active(state, &self.id.clone());
+        let groupper_element = self.get_element();
+
+        if let Some(groupper_element) = groupper_element {
+            if is_active.unwrap_or_default() != true {
+                // if &groupper_element.clone().into() == element {
+                //     if let Some(parent_ctx_groupper) = &parent_ctx_groupper {
+                //         let parent_ctx_groupper = parent_ctx_groupper.borrow();
+
+                //         if parent_groupper_element.is_none() {
+                //             parent_groupper_element = parent_ctx_groupper.get_element();
+                //         }
+
+                // if
+                //     parent_groupper_element.is_some() &&
+                //     !self.get_is_active(state, &parent_ctx_groupper.id).unwrap_or_default() &&
+                //     DOM::node_contains(
+                //         state.container,
+                //         parentGroupperElement
+                //     ) &&
+                //     parentGroupperElement !== state.container
+                // {
+                //     state.skipped_focusable = Some(true);
+                //     return Some(*NodeFilterEnum::FilterReject);
+                // }
+                //     }
+                // }
+
+                //         if (
+                //             groupperElement !== element &&
+                //             dom.nodeContains(groupperElement, element)
+                //         ) {
+                //             state.skippedFocusable = true;
+                //             return NodeFilter.FILTER_REJECT;
+                //         }
+
+                //         const cached = cachedGrouppers[this.id];
+                //         let first: HTMLElement | null | undefined;
+
+                //         if ("first" in cached) {
+                //             first = cached.first;
+                //         } else {
+                //             first = cached.first = this.getFirst(true);
+                //         }
+
+                //         if (first && state.acceptCondition(first)) {
+                //             state.rejectElementsFrom = groupperElement;
+                //             state.skippedFocusable = true;
+
+                //             if (first !== state.from) {
+                //                 state.found = true;
+                //                 state.foundElement = first;
+                //                 return NodeFilter.FILTER_ACCEPT;
+                //             } else {
+                //                 return NodeFilter.FILTER_REJECT;
+                //             }
+                //         }
+            }
+        }
+        None
     }
 }
 

@@ -4,8 +4,13 @@ use crate::{
     types::{self, GetWindow},
     utils::{DummyInputManager, TabsterPart},
 };
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
-use web_sys::HtmlElement;
+use std::{
+    cell::{RefCell, RefMut},
+    collections::HashMap,
+    ops::Deref,
+    sync::Arc,
+};
+use web_sys::{Element, HtmlElement};
 
 struct MoverDummyManager(DummyInputManager);
 
@@ -23,6 +28,14 @@ pub struct Mover {
     part: TabsterPart<types::MoverProps>,
     dummy_manager: Option<MoverDummyManager>,
     visibility_tolerance: f32,
+}
+
+impl Deref for Mover {
+    type Target = TabsterPart<types::MoverProps>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.part
+    }
 }
 
 impl Mover {
@@ -77,6 +90,14 @@ impl Mover {
 
     pub fn id(&self) -> &String {
         &self.part.id
+    }
+
+    pub fn accept_element(
+        &self,
+        element: &Element,
+        state: &mut RefMut<'_, types::FocusableAcceptElementState>,
+    ) -> Option<u32> {
+        None
     }
 }
 

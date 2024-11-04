@@ -9,14 +9,15 @@ use crate::{
         FocusableAcceptElementState, DOMAPI,
     },
     utils::{
-        create_element_tree_walker, get_dummy_input_container, get_last_child, is_display_none,
-        matches_selector, should_ignore_focus, NodeFilterEnum,
+        create_element_tree_walker, get_dummy_input_container, get_last_child,
+        get_radio_button_group, is_display_none, is_radio, matches_selector, should_ignore_focus,
+        NodeFilterEnum,
     },
 };
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
-    Element, HtmlElement, Node, SvgElement,
+    Element, HtmlElement, HtmlInputElement, Node, SvgElement,
 };
 
 #[derive(Clone)]
@@ -253,10 +254,14 @@ impl FocusableAPI {
             container: container.clone(),
             from: current_element.clone().unwrap_or_else(|| container.clone()),
             from_ctx: None,
+            is_backward,
             found: None,
             found_element: None,
             found_backward: None,
             reject_elements_from: None,
+            cached_grouppers: HashMap::new(),
+            cached_radio_groups: HashMap::new(),
+            is_find_all: None,
             skipped_focusable: None,
         };
         let accept_element_state = Arc::new(RefCell::new(accept_element_state));
@@ -395,7 +400,7 @@ impl FocusableAPI {
         element: Element,
         state: &Arc<RefCell<FocusableAcceptElementState>>,
     ) -> u32 {
-        let mut state = state.try_borrow_mut().unwrap_throw();
+        let mut state = state.borrow_mut();
         if matches!(state.found, Some(true)) {
             return *NodeFilterEnum::FilterAccept;
         }
@@ -420,7 +425,7 @@ impl FocusableAPI {
             return *NodeFilterEnum::FilterSkip;
         }
 
-        if !DOM::node_contains(Some(container.into()), Some(element.clone().into())) {
+        if !DOM::node_contains(Some(container.clone().into()), Some(element.clone().into())) {
             return *NodeFilterEnum::FilterReject;
         }
 
@@ -495,8 +500,6 @@ impl FocusableAPI {
             return *NodeFilterEnum::FilterReject;
         }
 
-        let mut result = None::<u32>;
-
         let from_ctx = if let Some(from_ctx) = state.from_ctx.clone() {
             Some(from_ctx)
         } else {
@@ -507,10 +510,10 @@ impl FocusableAPI {
         };
 
         let from_mover = from_ctx.clone().map(|c| c.mover).flatten();
-        let groupper = ctx.groupper;
-        let mover = ctx.mover;
+        let mut groupper = ctx.groupper;
+        let mut mover = ctx.mover;
 
-        result = {
+        let mut result = {
             let tabster = self.tabster.borrow();
             if let Some(modalizer) = &tabster.modalizer {
                 modalizer.accept_element(&element, &mut state)
@@ -523,19 +526,149 @@ impl FocusableAPI {
             state.skipped_focusable = Some(true);
         }
 
+        if result.is_none() && (from_mover.is_some() || groupper.is_some() || mover.is_some()) {
+            let groupper_element = if let Some(groupper) = &groupper {
+                let groupper = groupper.borrow_mut();
+                groupper.get_element()
+            } else {
+                None
+            };
+            let from_mover_element = if let Some(from_mover) = &from_mover {
+                let from_mover = from_mover.borrow_mut();
+                from_mover.get_element()
+            } else {
+                None
+            };
+            let mut mover_element = if let Some(mover) = &mover {
+                let mover = mover.borrow_mut();
+                mover.get_element()
+            } else {
+                None
+            };
+
+            if mover_element.is_some()
+                && DOM::node_contains(
+                    from_mover_element.clone().map(|el| el.into()),
+                    mover_element.clone().map(|el| el.into()),
+                )
+                && DOM::node_contains(
+                    Some(container.clone().into()),
+                    from_mover_element.clone().map(|el| el.into()),
+                )
+                && (groupper_element.is_none()
+                    || mover.is_none()
+                    || DOM::node_contains(
+                        from_mover_element.clone().map(|el| el.into()),
+                        groupper_element.clone().map(|el| el.into()),
+                    ))
+            {
+                mover = from_mover;
+                mover_element = from_mover_element;
+            }
+
+            if groupper_element.is_some()
+                && (groupper_element == Some(container.clone())
+                    || !DOM::node_contains(
+                        Some(container.clone().into()),
+                        groupper_element.clone().map(|el| el.into()),
+                    ))
+            {
+                groupper = None;
+            }
+
+            if mover_element.is_some()
+                && !DOM::node_contains(
+                    Some(container.clone().into()),
+                    mover_element.clone().map(|el| el.into()),
+                )
+            {
+                mover = None;
+            }
+
+            if groupper.is_some() && mover.is_some() {
+                if mover_element.is_some()
+                    && groupper_element.is_some()
+                    && !DOM::node_contains(
+                        groupper_element.clone().map(|el| el.into()),
+                        mover_element.clone().map(|el| el.into()),
+                    )
+                {
+                    mover = None;
+                } else {
+                    groupper = None;
+                }
+            }
+
+            if let Some(groupper) = &groupper {
+                let mut groupper = groupper.borrow_mut();
+                result = groupper.accept_element(&element, &mut state);
+            }
+
+            if let Some(mover) = &mover {
+                let mover = mover.borrow();
+                result = mover.accept_element(&element, &mut state);
+            }
+        }
+
         if result.is_none() {
-            result = if (state.accept_condition)(element.dyn_into().unwrap_throw()) {
+            result = if (state.accept_condition)(element.clone().dyn_into().unwrap_throw()) {
                 Some(*NodeFilterEnum::FilterAccept)
             } else {
                 Some(*NodeFilterEnum::FilterSkip)
             };
 
-            // if (
-            //     result === NodeFilter.FILTER_SKIP &&
-            //     this.isFocusable(element, false, true, true)
-            // ) {
-            //     state.skippedFocusable = true;
-            // }
+            if result == Some(*NodeFilterEnum::FilterSkip)
+                && self.is_focusable(&element, Some(false), Some(true), Some(true))
+            {
+                state.skipped_focusable = Some(true);
+            }
+        }
+
+        if result == Some(*NodeFilterEnum::FilterAccept) && !state.found.unwrap_or_default() {
+            if !state.is_find_all.unwrap_throw()
+                && is_radio(&element)
+                && !element
+                    .clone()
+                    .dyn_into::<HtmlInputElement>()
+                    .unwrap_throw()
+                    .checked()
+            {
+                // We need to mimic the browser's behaviour to skip unchecked radio buttons.
+                let element = element
+                    .clone()
+                    .dyn_into::<HtmlInputElement>()
+                    .unwrap_throw();
+                let radio_group_name = element.name();
+                let mut radio_group = state.cached_radio_groups.get(&radio_group_name).cloned();
+
+                if radio_group.is_none() {
+                    radio_group = get_radio_button_group(&element);
+
+                    if let Some(radio_group) = radio_group.clone() {
+                        state
+                            .cached_radio_groups
+                            .insert(radio_group_name, radio_group);
+                    }
+                }
+                let radio_group = radio_group.unwrap_throw();
+
+                if radio_group.checked.is_some() && radio_group.checked != Some(element) {
+                    // Currently found element is a radio button in a group that has another radio button checked.
+                    return *NodeFilterEnum::FilterSkip;
+                }
+            }
+
+            let element: HtmlElement = element.dyn_into().unwrap_throw();
+            if state.is_backward.unwrap_or_default() {
+                // When TreeWalker goes backwards, it visits the container first,
+                // then it goes inside. So, if the container is accepted, we remember it,
+                // but allowing the TreeWalker to check inside.
+                state.found_backward = Some(element.clone());
+                result = Some(*NodeFilterEnum::FilterSkip);
+            } else {
+                state.found = Some(true);
+                state.found_element = Some(element.clone());
+            }
         }
 
         result.unwrap()

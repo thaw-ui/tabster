@@ -1,20 +1,12 @@
 use crate::{
-    groupper::Groupper,
-    modalizer::Modalizer,
-    mover::Mover,
-    mutation_event::observe_mutations,
-    tabster::TabsterCore,
-    utils::{NodeFilterEnum, TabsterPart},
+    groupper::Groupper, modalizer::Modalizer, mover::Mover, mutation_event::observe_mutations,
+    tabster::TabsterCore, utils::TabsterPart,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    cell::{RefCell, RefMut},
-    ops::Deref,
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::HashMap, ops::Deref, sync::Arc};
 use web_sys::{
-    wasm_bindgen::UnwrapThrowExt, Document, Element, HtmlElement, KeyboardEvent, MutationObserver,
-    MutationRecord, Node, NodeFilter, TreeWalker, Window,
+    wasm_bindgen::UnwrapThrowExt, Document, Element, HtmlElement, HtmlInputElement, KeyboardEvent,
+    MutationObserver, MutationRecord, Node, NodeFilter, NodeList, TreeWalker, Window,
 };
 
 #[derive(Debug, Default, Clone)]
@@ -184,8 +176,6 @@ pub struct MoverProps {
 pub struct ModalizerProps {
     pub is_always_accessible: Option<bool>,
 }
-
-
 
 #[derive(Debug, Default)]
 pub struct FindFocusableOutputProps {
@@ -372,9 +362,24 @@ pub trait DOMAPI {
     fn append_child(parent: Node, child: Node) -> Node;
 
     fn insert_before(parent: Node, child: Node, reference_child: Option<Node>) -> Node;
+
+    fn get_elements_by_name(reference_element: &HtmlElement, name: &str) -> NodeList;
 }
 
 pub type GetWindow = Box<dyn Fn() -> Window>;
+
+#[derive(Clone)]
+pub struct RadioButtonGroup {
+    pub name: String,
+    /// Set<HtmlInputElement>
+    pub buttons: web_sys::js_sys::Set,
+    pub checked: Option<HtmlInputElement>,
+}
+
+pub struct CachedGroupper {
+    pub is_active: Option<bool>,
+    pub first: Option<HtmlElement>,
+}
 
 pub struct FocusableAcceptElementState {
     pub container: HtmlElement,
@@ -382,6 +387,7 @@ pub struct FocusableAcceptElementState {
     pub current_ctx: Option<TabsterContext>,
     pub from: HtmlElement,
     pub from_ctx: Option<TabsterContext>,
+    pub is_backward: Option<bool>,
     pub found: Option<bool>,
     pub found_element: Option<HtmlElement>,
     pub found_backward: Option<HtmlElement>,
@@ -389,6 +395,9 @@ pub struct FocusableAcceptElementState {
     pub accept_condition: Box<dyn Fn(HtmlElement) -> bool>,
     pub has_custom_condition: Option<bool>,
     pub ignore_accessibility: Option<bool>,
+    pub cached_grouppers: HashMap<String, CachedGroupper>,
+    pub cached_radio_groups: HashMap<String, RadioButtonGroup>,
+    pub is_find_all: Option<bool>,
     /// A flag that indicates that some focusable elements were skipped
     /// during the search and the found element is not the one the browser
     /// would normally focus if the user pressed Tab.

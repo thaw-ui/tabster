@@ -14,8 +14,8 @@ use std::{
     sync::{Arc, OnceLock, RwLock},
 };
 use web_sys::{
-    wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    Document, Element, HtmlElement, Node, NodeFilter, TreeWalker,
+    wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt},
+    Document, Element, HtmlElement, HtmlInputElement, Node, NodeFilter, TreeWalker,
 };
 
 pub struct WeakHTMLElement<T, D> {
@@ -589,6 +589,47 @@ pub fn is_display_none(element: Element) -> bool {
     }
 
     false
+}
+
+pub fn is_radio(element: &Element) -> bool {
+    if element.tag_name() == "INPUT" {
+        let element: HtmlInputElement = element.clone().dyn_into().unwrap_throw();
+        if !element.name().is_empty() && element.type_() == "radio" {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn get_radio_button_group(element: &Element) -> Option<types::RadioButtonGroup> {
+    if !is_radio(element) {
+        return None;
+    }
+    let element = element
+        .clone()
+        .dyn_into::<HtmlInputElement>()
+        .unwrap_throw();
+    let name = element.name();
+    let radio_buttons = DOM::get_elements_by_name(&element, &name);
+    let mut checked: Option<HtmlInputElement> = None;
+    let buttons = web_sys::js_sys::Set::new(&JsValue::undefined());
+
+    for i in 0..radio_buttons.length() {
+        let el = radio_buttons.item(i).unwrap_throw();
+        let el: HtmlInputElement = el.dyn_into().unwrap_throw();
+        if is_radio(&el) {
+            if el.checked() {
+                checked = Some(el.clone());
+            }
+            buttons.add(&el);
+        }
+    }
+
+    Some(types::RadioButtonGroup {
+        name,
+        buttons,
+        checked,
+    })
 }
 
 /// If the passed element is Tabster dummy input, returns the container element this dummy input belongs to.

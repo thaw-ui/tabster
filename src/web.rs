@@ -1,6 +1,6 @@
 use web_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    HtmlElement, SvgElement, Window,
+    Window,
 };
 
 pub fn set_timeout(window: &Window, handler: impl Fn() + 'static, timeout: i32) -> i32 {

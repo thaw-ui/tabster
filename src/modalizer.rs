@@ -1,6 +1,10 @@
 use web_sys::{Element, HtmlElement};
 
-use crate::{dom_api::DOM, types::{self, DOMAPI}, utils::{NodeFilterEnum, TabsterPart}};
+use crate::{
+    dom_api::DOM,
+    types::{self, DOMAPI},
+    utils::{NodeFilterEnum, TabsterPart},
+};
 use std::{cell::RefMut, ops::Deref};
 
 pub struct Modalizer {
@@ -32,11 +36,13 @@ impl ModalizerAPI {
         let current_modalizer = state.current_ctx.clone().map(|c| c.modalizer).flatten();
 
         if modalizer_user_id.is_some() {
-            for  el in self.active_elements.iter() {
-                if DOM::node_contains(Some(element.clone().into()), Some(el.clone().into())) || **el == *element {
+            for el in self.active_elements.iter() {
+                if DOM::node_contains(Some(element.clone().into()), Some(el.clone().into()))
+                    || **el == *element
+                {
                     // We have a part of currently active modalizer somewhere deeper in the DOM,
                     // skipping all other checks.
-                    return Some(*NodeFilterEnum::FilterSkip)
+                    return Some(*NodeFilterEnum::FilterSkip);
                 }
             }
         }
