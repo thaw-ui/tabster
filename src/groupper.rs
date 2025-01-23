@@ -395,59 +395,62 @@ impl Groupper {
         let groupper_element = self.get_element();
 
         if let Some(groupper_element) = groupper_element {
-            if is_active.unwrap_or_default() != true {
-                // if &groupper_element.clone().into() == element {
-                //     if let Some(parent_ctx_groupper) = &parent_ctx_groupper {
-                //         let parent_ctx_groupper = parent_ctx_groupper.borrow();
+            if !is_active.unwrap_or_default() {
+                if &*groupper_element == element {
+                    if let Some(parent_ctx_groupper) = &parent_ctx_groupper {
+                        let parent_ctx_groupper = parent_ctx_groupper.borrow();
 
-                //         if parent_groupper_element.is_none() {
-                //             parent_groupper_element = parent_ctx_groupper.get_element();
-                //         }
+                        if parent_groupper_element.is_none() {
+                            parent_groupper_element = parent_ctx_groupper.get_element();
+                        }
 
-                // if
-                //     parent_groupper_element.is_some() &&
-                //     !self.get_is_active(state, &parent_ctx_groupper.id).unwrap_or_default() &&
-                //     DOM::node_contains(
-                //         state.container,
-                //         parentGroupperElement
-                //     ) &&
-                //     parentGroupperElement !== state.container
-                // {
-                //     state.skipped_focusable = Some(true);
-                //     return Some(*NodeFilterEnum::FilterReject);
-                // }
-                //     }
-                // }
+                        if
+                            parent_groupper_element.is_some() &&
+                            !self.get_is_active(state, &parent_ctx_groupper.id).unwrap_or_default() &&
+                            DOM::node_contains(
+                                Some(state.container.clone().into()),
+                                parent_groupper_element.clone().map(|el| el.into())
+                            ) &&
+                            parent_groupper_element != Some(state.container.clone())
+                        {
+                            state.skipped_focusable = Some(true);
+                            return Some(*NodeFilterEnum::FilterReject);
+                        }
+                    }
+                }
 
-                //         if (
-                //             groupperElement !== element &&
-                //             dom.nodeContains(groupperElement, element)
-                //         ) {
-                //             state.skippedFocusable = true;
-                //             return NodeFilter.FILTER_REJECT;
-                //         }
+                if
+                    &*groupper_element != element &&
+                    DOM::node_contains(Some(groupper_element.clone().into()), Some(element.clone().into()))
+                {
+                    state.skipped_focusable = Some(true);
+                    return Some(*NodeFilterEnum::FilterReject);
+                }
 
-                //         const cached = cachedGrouppers[this.id];
-                //         let first: HTMLElement | null | undefined;
+                
 
-                //         if ("first" in cached) {
-                //             first = cached.first;
-                //         } else {
-                //             first = cached.first = this.getFirst(true);
-                //         }
+                let cached = state.cached_grouppers.get_mut(self.id()).unwrap_throw();
+                let first = if let Some(first) = cached.first.clone() {
+                    Some(first)
+                } else {
+                    cached.first = self.get_first(true);
+                    cached.first.clone()
+                };
 
-                //         if (first && state.acceptCondition(first)) {
-                //             state.rejectElementsFrom = groupperElement;
-                //             state.skippedFocusable = true;
-
-                //             if (first !== state.from) {
-                //                 state.found = true;
-                //                 state.foundElement = first;
-                //                 return NodeFilter.FILTER_ACCEPT;
-                //             } else {
-                //                 return NodeFilter.FILTER_REJECT;
-                //             }
-                //         }
+                if let Some(first) = first {
+                    if (state.accept_condition)(first.clone()) {
+                        state.reject_elements_from = Some(groupper_element);
+                        state.skipped_focusable = Some(true);
+    
+                        if first != state.from {
+                            state.found = Some(true);
+                            state.found_element = Some(first);
+                            return Some(*NodeFilterEnum::FilterAccept);
+                        } else {
+                            return Some(*NodeFilterEnum::FilterReject);
+                        }
+                    }
+                }
             }
         }
         None

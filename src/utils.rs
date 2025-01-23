@@ -175,8 +175,8 @@ impl DummyInputManagerCore {
 
         let tabster = tabster.borrow();
         let get_window = &tabster.get_window;
-        let first_dummy = DummyInput::new(get_window.clone(), is_outside);
-        let last_dummy = DummyInput::new(get_window.clone(), is_outside);
+        let first_dummy = DummyInput::new(get_window.clone(), is_outside, DummyInputProps { is_phantom: None, is_first: true });
+        let last_dummy = DummyInput::new(get_window.clone(), is_outside, DummyInputProps { is_phantom: None, is_first: true });
 
         let this = Arc::new(RefCell::new(Self {
             add_timer: Default::default(),
@@ -293,13 +293,22 @@ impl DummyInputManagerCore {
     }
 }
 
+pub struct DummyInputProps {
+    /// The input is created to be used only once and autoremoved when focused.
+    is_phantom: Option<bool>,
+    /// Whether the input is before or after the content it is guarding.
+    is_first: bool,
+}
+
 pub struct DummyInput {
+    is_phantom: bool,
     pub input: Option<HtmlElement>,
+    is_first: bool,
     pub is_outside: bool,
 }
 
 impl DummyInput {
-    fn new(get_window: Arc<GetWindow>, is_outside: bool) -> Self {
+    fn new(get_window: Arc<GetWindow>, is_outside: bool, props: DummyInputProps) -> Self {
         let win = get_window();
         let input: HtmlElement = win
             .document()
@@ -321,9 +330,6 @@ impl DummyInput {
         console_log!("DummyInput::new");
         // makeFocusIgnored(input);
 
-        // this.input = input;
-        // this.isFirst = props.isFirst;
-        // this.isOutside = isOutside;
         // this._isPhantom = props.isPhantom ?? false;
         // this._fixedTarget = fixedTarget;
 
@@ -351,6 +357,8 @@ impl DummyInput {
 
         Self {
             input: Some(input),
+            is_first: props.is_first,
+            is_phantom: props.is_phantom.unwrap_or_default(),
             is_outside,
         }
     }
