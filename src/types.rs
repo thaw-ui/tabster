@@ -1,6 +1,10 @@
 use crate::{
-    groupper::Groupper, modalizer::Modalizer, mover::Mover, mutation_event::observe_mutations,
-    tabster::TabsterCore, utils::TabsterPart,
+    groupper::Groupper,
+    modalizer::{ArcCellModalizer, Modalizer},
+    mover::Mover,
+    mutation_event::observe_mutations,
+    tabster::TabsterCore,
+    utils::TabsterPart,
 };
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap, ops::Deref, sync::Arc};
@@ -85,7 +89,7 @@ pub struct GetTabsterContextOptions {
 #[derive(Clone)]
 pub struct TabsterContext {
     pub root: Arc<Root>,
-    pub modalizer: Option<Arc<Modalizer>>,
+    pub modalizer: Option<Arc<RefCell<Modalizer>>>,
     pub groupper: Option<Arc<RefCell<Groupper>>>,
     pub mover: Option<Arc<RefCell<Mover>>>,
     pub groupper_before_mover: Option<bool>,
@@ -414,7 +418,7 @@ pub struct TabsterOnElement {
     pub root: Option<Arc<Root>>,
     pub mover: Option<Arc<RefCell<Mover>>>,
     pub groupper: Option<Arc<RefCell<Groupper>>>,
-    pub modalizer: Option<Arc<Modalizer>>,
+    pub modalizer: Option<ArcCellModalizer>,
     pub focusable: Option<Arc<FocusableProps>>,
     pub uncontrolled: Option<UncontrolledProps>,
 }

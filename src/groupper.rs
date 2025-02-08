@@ -85,6 +85,8 @@ impl GroupperDummyManager {
     }
 }
 
+pub type ArcCellGroupper = Arc<RefCell<Groupper>>;
+
 pub struct Groupper {
     part: TabsterPart<types::GroupperProps>,
     should_tab_inside: bool,
@@ -135,7 +137,7 @@ impl Groupper {
         this
     }
 
-    fn find_next_tabbable(
+    pub(crate) fn find_next_tabbable(
         &mut self,
         current_element: Option<HtmlElement>,
         reference_element: Option<HtmlElement>,
@@ -404,14 +406,15 @@ impl Groupper {
                             parent_groupper_element = parent_ctx_groupper.get_element();
                         }
 
-                        if
-                            parent_groupper_element.is_some() &&
-                            !self.get_is_active(state, &parent_ctx_groupper.id).unwrap_or_default() &&
-                            DOM::node_contains(
+                        if parent_groupper_element.is_some()
+                            && !self
+                                .get_is_active(state, &parent_ctx_groupper.id)
+                                .unwrap_or_default()
+                            && DOM::node_contains(
                                 Some(state.container.clone().into()),
-                                parent_groupper_element.clone().map(|el| el.into())
-                            ) &&
-                            parent_groupper_element != Some(state.container.clone())
+                                parent_groupper_element.clone().map(|el| el.into()),
+                            )
+                            && parent_groupper_element != Some(state.container.clone())
                         {
                             state.skipped_focusable = Some(true);
                             return Some(*NodeFilterEnum::FilterReject);
@@ -419,15 +422,15 @@ impl Groupper {
                     }
                 }
 
-                if
-                    &*groupper_element != element &&
-                    DOM::node_contains(Some(groupper_element.clone().into()), Some(element.clone().into()))
+                if &*groupper_element != element
+                    && DOM::node_contains(
+                        Some(groupper_element.clone().into()),
+                        Some(element.clone().into()),
+                    )
                 {
                     state.skipped_focusable = Some(true);
                     return Some(*NodeFilterEnum::FilterReject);
                 }
-
-                
 
                 let cached = state.cached_grouppers.get_mut(self.id()).unwrap_throw();
                 let first = if let Some(first) = cached.first.clone() {
@@ -441,7 +444,7 @@ impl Groupper {
                     if (state.accept_condition)(first.clone()) {
                         state.reject_elements_from = Some(groupper_element);
                         state.skipped_focusable = Some(true);
-    
+
                         if first != state.from {
                             state.found = Some(true);
                             state.found_element = Some(first);

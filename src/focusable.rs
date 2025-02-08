@@ -240,7 +240,7 @@ impl FocusableAPI {
                         RootAPI::get_tabster_context(&self.tabster, &container, Default::default());
 
                     tabster_context
-                        .map(|c| c.modalizer.map(|m| m.user_id.clone()))
+                        .map(|c| c.modalizer.map(|m| m.borrow().user_id.clone()))
                         .flatten()
                 }
             };
@@ -467,7 +467,7 @@ impl FocusableAPI {
             && (element.tag_name() == "IFRAME" || element.tag_name() == "WEBVIEW")
         {
             let user_id = if let Some(modalizer) = &ctx.modalizer {
-                Some(modalizer.user_id.clone())
+                Some(modalizer.borrow().user_id.clone())
             } else {
                 None
             };

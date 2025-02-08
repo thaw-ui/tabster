@@ -5,7 +5,13 @@ use crate::{
     types::{self, DOMAPI},
     utils::{NodeFilterEnum, TabsterPart},
 };
-use std::{cell::RefMut, ops::Deref};
+use std::{
+    cell::{RefCell, RefMut},
+    ops::Deref,
+    sync::Arc,
+};
+
+pub type ArcCellModalizer = Arc<RefCell<Modalizer>>;
 
 pub struct Modalizer {
     part: TabsterPart<types::ModalizerProps>,
@@ -17,6 +23,18 @@ impl Deref for Modalizer {
 
     fn deref(&self) -> &Self::Target {
         &self.part
+    }
+}
+
+impl Modalizer {
+    pub(crate) fn find_next_tabbable(
+        &mut self,
+        current_element: Option<HtmlElement>,
+        reference_element: Option<HtmlElement>,
+        is_backward: Option<bool>,
+        ignore_accessibility: Option<bool>,
+    ) -> Option<types::NextTabbable> {
+        todo!()
     }
 }
 
@@ -47,11 +65,20 @@ impl ModalizerAPI {
             }
         }
 
-        if modalizer_user_id == current_modalizer.clone().map(|cm| cm.user_id.clone()) {
+        if modalizer_user_id
+            == current_modalizer
+                .clone()
+                .map(|cm| cm.borrow().user_id.clone())
+        {
             None
         } else if modalizer_user_id.is_none()
             && current_modalizer
-                .map(|cm| cm.get_props().is_always_accessible.unwrap_or_default())
+                .map(|cm| {
+                    cm.borrow()
+                        .get_props()
+                        .is_always_accessible
+                        .unwrap_or_default()
+                })
                 .unwrap_or_default()
         {
             None

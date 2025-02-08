@@ -175,8 +175,22 @@ impl DummyInputManagerCore {
 
         let tabster = tabster.borrow();
         let get_window = &tabster.get_window;
-        let first_dummy = DummyInput::new(get_window.clone(), is_outside, DummyInputProps { is_phantom: None, is_first: true });
-        let last_dummy = DummyInput::new(get_window.clone(), is_outside, DummyInputProps { is_phantom: None, is_first: true });
+        let first_dummy = DummyInput::new(
+            get_window.clone(),
+            is_outside,
+            DummyInputProps {
+                is_phantom: None,
+                is_first: true,
+            },
+        );
+        let last_dummy = DummyInput::new(
+            get_window.clone(),
+            is_outside,
+            DummyInputProps {
+                is_phantom: None,
+                is_first: true,
+            },
+        );
 
         let this = Arc::new(RefCell::new(Self {
             add_timer: Default::default(),

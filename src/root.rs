@@ -1,7 +1,7 @@
 use crate::{
     groupper::Groupper,
     instance::{get_tabster_on_element, update_tabster_by_attribute},
-    modalizer::Modalizer,
+    modalizer::{ArcCellModalizer, Modalizer},
     mover::Mover,
     set_tabster_attribute,
     tabster::TabsterCore,
@@ -101,7 +101,7 @@ impl RootAPI {
         }
 
         let mut root: Option<Arc<types::Root>> = None;
-        let mut modalizer = None::<Arc<Modalizer>>;
+        let mut modalizer = None::<ArcCellModalizer>;
         let mut groupper = None::<Arc<RefCell<Groupper>>>;
         let mut mover = None::<Arc<RefCell<Mover>>>;
         let mut excluded_from_mover = false;
@@ -180,7 +180,7 @@ impl RootAPI {
 
                         let user_id = {
                             if let Some(modalizer) = modalizer.as_ref() {
-                                Some(modalizer.user_id.clone())
+                                Some(modalizer.borrow().user_id.clone())
                             } else {
                                 None
                             }

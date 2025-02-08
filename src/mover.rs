@@ -10,7 +10,11 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use web_sys::{wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt}, Element, HtmlElement, IntersectionObserver, IntersectionObserverEntry, IntersectionObserverInit};
+use web_sys::{
+    wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt},
+    Element, HtmlElement, IntersectionObserver, IntersectionObserverEntry,
+    IntersectionObserverInit,
+};
 
 struct MoverDummyManager(DummyInputManager);
 
@@ -23,6 +27,8 @@ impl MoverDummyManager {
         Self(DummyInputManager::new(tabster, element, sys, None))
     }
 }
+
+pub type ArcCellMover = Arc<RefCell<Mover>>;
 
 pub struct Mover {
     part: TabsterPart<types::MoverProps>,
@@ -62,10 +68,17 @@ impl Mover {
             intersection_observer: None,
             dummy_manager: None,
             visibility_tolerance,
-        }.init(tabster, element, props, sys)
+        }
+        .init(tabster, element, props, sys)
     }
 
-    fn init(mut self, tabster: Arc<RefCell<TabsterCore>>, element: &HtmlElement, props: types::MoverProps, sys: Option<types::SysProps>) -> Self {
+    fn init(
+        mut self,
+        tabster: Arc<RefCell<TabsterCore>>,
+        element: &HtmlElement,
+        props: types::MoverProps,
+        sys: Option<types::SysProps>,
+    ) -> Self {
         let control_tab = {
             let tabster = tabster.borrow();
             tabster.control_tab
@@ -83,17 +96,24 @@ impl Mover {
         };
 
         if props.track_state.unwrap_or_default() || props.visibility_aware.unwrap_or_default() > 0 {
-            let on_intersection: Closure<dyn Fn(Vec<IntersectionObserverEntry>)> = Closure::new(move |entries: Vec<IntersectionObserverEntry>| {
-                for entry in entries.into_iter() {
-
-                }
-            });
+            let on_intersection: Closure<dyn Fn(Vec<IntersectionObserverEntry>)> = Closure::new(
+                move |entries: Vec<IntersectionObserverEntry>| {
+                    for entry in entries.into_iter() {}
+                },
+            );
             let on_intersection = on_intersection.into_js_value();
             let options = IntersectionObserverInit::new();
-            let threshold = serde_wasm_bindgen::to_value(&[0.0, 0.25, 0.5, 0.75, 1.0]).unwrap_throw();
+            let threshold =
+                serde_wasm_bindgen::to_value(&[0.0, 0.25, 0.5, 0.75, 1.0]).unwrap_throw();
             options.set_threshold(&threshold);
-            self.intersection_observer = Some(IntersectionObserver::new_with_options(on_intersection.as_ref().unchecked_ref(), &options).unwrap_throw());
-         
+            self.intersection_observer = Some(
+                IntersectionObserver::new_with_options(
+                    on_intersection.as_ref().unchecked_ref(),
+                    &options,
+                )
+                .unwrap_throw(),
+            );
+
             self.observe_state();
         }
 
@@ -102,6 +122,16 @@ impl Mover {
 
     pub fn id(&self) -> &String {
         &self.part.id
+    }
+
+    pub(crate) fn find_next_tabbable(
+        &mut self,
+        current_element: Option<HtmlElement>,
+        reference_element: Option<HtmlElement>,
+        is_backward: Option<bool>,
+        ignore_accessibility: Option<bool>,
+    ) -> Option<types::NextTabbable> {
+        todo!()
     }
 
     pub fn accept_element(
@@ -118,8 +148,6 @@ impl Mover {
         if element.is_none() {
             return;
         }
-
-        
     }
 }
 
