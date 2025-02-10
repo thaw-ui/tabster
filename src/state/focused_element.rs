@@ -19,12 +19,15 @@ use std::{
     },
 };
 
-static FOCUSED_ELEMENT_STATE_IS_TABBING: AtomicBool = AtomicBool::new(false);
-static FOCUSED_ELEMENT_STATE_IS_TABBING_TIMER: AtomicI32 = AtomicI32::new(0);
+use super::subscribable::Subscribable;
+
+pub(crate) static FOCUSED_ELEMENT_STATE_IS_TABBING: AtomicBool = AtomicBool::new(false);
+pub(crate) static FOCUSED_ELEMENT_STATE_IS_TABBING_TIMER: AtomicI32 = AtomicI32::new(0);
 
 pub struct FocusedElementState {
     tabster: Arc<RefCell<TabsterCore>>,
     win: Arc<types::GetWindow>,
+    subscribable: Subscribable<HtmlElement>,
 }
 
 impl FocusedElementState {
@@ -32,12 +35,12 @@ impl FocusedElementState {
         Self {
             tabster,
             win: get_window,
+            subscribable: Subscribable::new(),
         }
     }
 
     pub fn get_focused_element(&self) -> Option<HtmlElement> {
-        // TODO
-        None
+        self.subscribable.get_val()
     }
 
     pub fn find_next_tabbable(

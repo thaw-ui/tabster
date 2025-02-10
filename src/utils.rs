@@ -19,7 +19,7 @@ use web_sys::{
 };
 
 pub struct WeakHTMLElement<T, D> {
-    weak_ref: T,
+    weak_ref: Option<T>,
     data: Option<D>,
 }
 
@@ -36,25 +36,24 @@ impl<T, D: Clone> WeakHTMLElement<T, D> {
         // }
 
         Self {
-            weak_ref: element,
+            weak_ref: Some(element),
             data,
         }
     }
 
-    // fn get(&self) -> Option<T> {
-    //     const ref = this._ref;
-    //     let element: T | undefined;
+    fn get(&self) -> Option<T> {
+        let element = None::<T>;
 
-    //     if (ref) {
-    //         element = ref.deref();
+        if let Some(weak_ref) = &self.weak_ref {
+            // element = ref.deref();
 
-    //         if (!element) {
-    //             delete this._ref;
-    //         }
-    //     }
+            // if (!element) {
+            //     delete this._ref;
+            // }
+        }
 
-    //     return element;
-    // }
+        element
+    }
 
     fn get_data(&self) -> Option<D> {
         self.data.clone()

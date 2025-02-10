@@ -1,15 +1,18 @@
 use crate::{
     console_log,
     dom_api::DOM,
+    state::focused_element::FOCUSED_ELEMENT_STATE_IS_TABBING,
     tabster::TabsterCore,
-    types::{self, GetWindow, DOMAPI},
-    utils::{get_dummy_input_container, DummyInputManager, TabsterPart},
+    types::{self, GetWindow, MoverProps, DOMAPI},
+    utils::{
+        get_dummy_input_container, DummyInputManager, NodeFilterEnum, TabsterPart, WeakHTMLElement,
+    },
 };
 use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
     ops::Deref,
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
 };
 use web_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
@@ -35,6 +38,7 @@ pub struct Mover {
     part: TabsterPart<types::MoverProps>,
 
     intersection_observer: Option<IntersectionObserver>,
+    current: Option<WeakHTMLElement<HtmlElement, u8>>,
 
     dummy_manager: Option<MoverDummyManager>,
     visibility_tolerance: f32,
@@ -69,6 +73,7 @@ impl Mover {
             intersection_observer: None,
             dummy_manager: None,
             visibility_tolerance,
+            current: None,
         }
         .init(tabster, element, props, sys)
     }
@@ -185,6 +190,86 @@ impl Mover {
         element: &Element,
         state: &mut RefMut<'_, types::FocusableAcceptElementState>,
     ) -> Option<u32> {
+        if !FOCUSED_ELEMENT_STATE_IS_TABBING.load(Ordering::SeqCst) {
+            let Some(current_ctx) = state.current_ctx.as_ref() else {
+                return None;
+            };
+
+            if current_ctx.excluded_from_mover.unwrap() {
+                return Some(*NodeFilterEnum::FilterReject);
+            } else {
+                return None;
+            }
+        }
+
+        let MoverProps {
+            memorize_current,
+            visibility_aware,
+            has_default,
+            ..
+        } = self.props.clone();
+
+        let has_default = has_default.unwrap_or(true);
+        let mover_element = self.get_element();
+
+        if mover_element.is_some()
+            && (memorize_current.unwrap_or_default()
+                || visibility_aware.unwrap_or_default() != 0
+                || has_default)
+            && (!DOM::node_contains(
+                mover_element.clone().map(Into::into),
+                Some(state.from.clone().into()),
+            ) || get_dummy_input_container(&Some(state.from.clone().into())) == mover_element)
+        {
+            let found: Option<HtmlElement> = None;
+
+            if memorize_current.unwrap_or_default() {
+                // let current = self.current.get();
+
+                //         if (current && state.acceptCondition(current)) {
+                //             found = current;
+                //         }
+            }
+
+            //     if (!found && hasDefault) {
+            //         found = this._tabster.focusable.findDefault({
+            //             container: moverElement,
+            //             useActiveModalizer: true,
+            //         });
+            //     }
+
+            //     if (!found && visibilityAware) {
+            //         found = this._tabster.focusable.findElement({
+            //             container: moverElement,
+            //             useActiveModalizer: true,
+            //             isBackward: state.isBackward,
+            //             acceptCondition: (el) => {
+            //                 const id = getElementUId(this._win, el);
+            //                 const visibility = this._visible[id];
+
+            //                 return (
+            //                     moverElement !== el &&
+            //                     !!this._allElements?.get(el) &&
+            //                     state.acceptCondition(el) &&
+            //                     (visibility === Visibilities.Visible ||
+            //                         (visibility === Visibilities.PartiallyVisible &&
+            //                             (visibilityAware ===
+            //                                 Visibilities.PartiallyVisible ||
+            //                                 !this._fullyVisible)))
+            //                 );
+            //             },
+            //         });
+            //     }
+
+            //     if (found) {
+            //         state.found = true;
+            //         state.foundElement = found;
+            //         state.rejectElementsFrom = moverElement;
+            //         state.skippedFocusable = true;
+            //         return NodeFilter.FILTER_ACCEPT;
+            //     }
+        }
+
         None
     }
 
