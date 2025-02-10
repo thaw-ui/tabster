@@ -5,7 +5,7 @@ use crate::{
     mover::Mover,
     set_tabster_attribute,
     tabster::TabsterCore,
-    types::{self, GetTabsterContextOptions, TabsterContext},
+    types::{self, GetTabsterContextOptions, Root, TabsterContext},
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{
@@ -297,5 +297,26 @@ impl RootAPI {
         } else {
             None
         }
+    }
+
+    pub(crate) fn get_root(
+        tabster: &Arc<RefCell<TabsterCore>>,
+        element: HtmlElement,
+    ) -> Option<Arc<Root>> {
+        let mut el = Some(element);
+        while let Some(new_el) = el.clone() {
+            let root = get_tabster_on_element(tabster, &new_el)
+                .map(|tabster_on_element| tabster_on_element.borrow().root.clone())
+                .flatten();
+
+            if root.is_some() {
+                return root;
+            }
+
+            let tabster = tabster.borrow();
+            el = (tabster.get_parent)(new_el.into()).map(|el| el.dyn_into().unwrap_throw());
+        }
+
+        None
     }
 }

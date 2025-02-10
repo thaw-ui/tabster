@@ -1,7 +1,8 @@
-use web_sys::{Element, HtmlElement};
+use web_sys::{wasm_bindgen::UnwrapThrowExt, Element, HtmlElement};
 
 use crate::{
     dom_api::DOM,
+    root::RootAPI,
     types::{self, DOMAPI},
     utils::{NodeFilterEnum, TabsterPart},
 };
@@ -34,7 +35,79 @@ impl Modalizer {
         is_backward: Option<bool>,
         ignore_accessibility: Option<bool>,
     ) -> Option<types::NextTabbable> {
-        todo!()
+        if self.get_element().is_none() {
+            return None;
+        }
+
+        let container = current_element
+            .clone()
+            .map(|current_element| {
+                RootAPI::get_root(&self.tabster, current_element)
+                    .map(|root| root.get_element())
+                    .flatten()
+            })
+            .flatten();
+
+        let mut next = None::<HtmlElement>;
+        let mut out_of_dom_order = false;
+        let mut uncontrolled = None::<HtmlElement>;
+
+        if let Some(container) = container {
+            let find_props = types::FindNextProps {
+                container: container.clone(),
+                current_element: current_element.clone(),
+                reference_element,
+                ignore_accessibility,
+                use_active_modalizer: Some(true),
+            };
+
+            let mut find_props_out = types::FindFocusableOutputProps::default();
+
+            let tabster = self.tabster.borrow();
+            let focusable = tabster.focusable.clone().unwrap_throw();
+            let mut focusable = focusable.borrow_mut();
+            next = if is_backward.unwrap_or_default() {
+                focusable.find_prev(find_props, &mut find_props_out)
+            } else {
+                focusable.find_next(find_props, &mut find_props_out)
+            };
+
+            let active_id = if let Some(modalizer) = &tabster.modalizer {
+                modalizer.active_id.clone()
+            } else {
+                None
+            };
+
+            if next.is_none() && self.props.is_trapped.unwrap_or_default() && active_id.is_some() {
+                let find_props = types::FindFirstProps {
+                    container,
+                    ignore_accessibility,
+                    use_active_modalizer: Some(true),
+                };
+
+                next = if is_backward.unwrap_or_default() {
+                    focusable.find_last(find_props, &mut find_props_out)
+                } else {
+                    focusable.find_first(find_props, &mut find_props_out)
+                };
+
+                if next.is_none() {
+                    next = current_element;
+                }
+
+                out_of_dom_order = true;
+            } else {
+                out_of_dom_order = find_props_out.out_of_dom_order.unwrap_or_default();
+            }
+
+            uncontrolled = find_props_out.uncontrolled;
+        }
+
+        Some(types::NextTabbable {
+            element: next,
+            uncontrolled,
+            out_of_dom_order: Some(out_of_dom_order),
+        })
     }
 }
 

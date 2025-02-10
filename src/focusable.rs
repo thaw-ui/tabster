@@ -342,7 +342,7 @@ impl FocusableAPI {
         {
             walker.set_current_node(&current_element.clone().unwrap().into());
         } else if matches!(is_backward, Some(true)) {
-            let Some(last_child) = get_last_child(container) else {
+            let Some(last_child) = get_last_child(&container) else {
                 return None;
             };
             if self.accept_element(last_child.clone().into(), &accept_element_state)

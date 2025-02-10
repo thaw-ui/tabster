@@ -344,7 +344,7 @@ impl DummyInput {
         console_log!("DummyInput::new");
         // makeFocusIgnored(input);
 
-        // this._isPhantom = props.isPhantom ?? false;
+        let is_phantom = props.is_phantom.unwrap_or_default();
         // this._fixedTarget = fixedTarget;
 
         // input.addEventListener("focusin", this._focusIn);
@@ -353,26 +353,26 @@ impl DummyInput {
         // (input as HTMLElementWithDummyContainer).__tabsterDummyContainer =
         //     element;
 
-        // if (this._isPhantom) {
-        //     this._disposeTimer = win.setTimeout(() => {
-        //         delete this._disposeTimer;
-        //         this.dispose();
-        //     }, 0);
+        if is_phantom {
+            //     this._disposeTimer = win.setTimeout(() => {
+            //         delete this._disposeTimer;
+            //         this.dispose();
+            //     }, 0);
 
-        //     this._clearDisposeTimeout = () => {
-        //         if (this._disposeTimer) {
-        //             win.clearTimeout(this._disposeTimer);
-        //             delete this._disposeTimer;
-        //         }
+            //     this._clearDisposeTimeout = () => {
+            //         if (this._disposeTimer) {
+            //             win.clearTimeout(this._disposeTimer);
+            //             delete this._disposeTimer;
+            //         }
 
-        //         delete this._clearDisposeTimeout;
-        //     };
-        // }
+            //         delete this._clearDisposeTimeout;
+            //     };
+        }
 
         Self {
             input: Some(input),
             is_first: props.is_first,
-            is_phantom: props.is_phantom.unwrap_or_default(),
+            is_phantom,
             is_outside,
         }
     }
@@ -444,9 +444,9 @@ pub fn get_adjacent_element(from: HtmlElement, prev: Option<bool>) -> Option<Htm
     adjacent
 }
 
-pub fn get_last_child(container: HtmlElement) -> Option<HtmlElement> {
+pub fn get_last_child(container: &HtmlElement) -> Option<HtmlElement> {
     let mut last_child: Option<HtmlElement> = None;
-    let mut el = DOM::get_last_element_child(Some(container.dyn_into().unwrap_throw()));
+    let mut el = DOM::get_last_element_child(Some(container.clone().dyn_into().unwrap_throw()));
     loop {
         if el.is_none() {
             break;

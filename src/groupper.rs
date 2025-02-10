@@ -182,7 +182,6 @@ impl Groupper {
             });
         }
 
-        // const tabster = this._tabster;
         let mut next = None::<HtmlElement>;
         let mut out_of_dom_order = false;
         let mut uncontrolled = None::<HtmlElement>;

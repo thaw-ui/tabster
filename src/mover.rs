@@ -1,8 +1,9 @@
 use crate::{
     console_log,
+    dom_api::DOM,
     tabster::TabsterCore,
-    types::{self, GetWindow},
-    utils::{DummyInputManager, TabsterPart},
+    types::{self, GetWindow, DOMAPI},
+    utils::{get_dummy_input_container, DummyInputManager, TabsterPart},
 };
 use std::{
     cell::{RefCell, RefMut},
@@ -11,7 +12,7 @@ use std::{
     sync::Arc,
 };
 use web_sys::{
-    wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt},
+    wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
     Element, HtmlElement, IntersectionObserver, IntersectionObserverEntry,
     IntersectionObserverInit,
 };
@@ -131,7 +132,52 @@ impl Mover {
         is_backward: Option<bool>,
         ignore_accessibility: Option<bool>,
     ) -> Option<types::NextTabbable> {
-        todo!()
+        let container = self.get_element();
+        let Some(container) = container else {
+            return None;
+        };
+
+        let current_is_dummy = get_dummy_input_container(&current_element.clone().map(Into::into))
+            == Some(container.clone());
+
+        let mut next = None::<HtmlElement>;
+        let mut out_of_dom_order = false;
+        let mut uncontrolled = None::<HtmlElement>;
+
+        if self.props.tabbable.unwrap_or_default()
+            || current_is_dummy
+            || current_element.clone().is_some_and(|el| {
+                !DOM::node_contains(Some(container.clone().into()), Some(el.into()))
+            })
+        {
+            let find_props = types::FindNextProps {
+                current_element,
+                reference_element,
+                container,
+                ignore_accessibility,
+                use_active_modalizer: Some(true),
+            };
+            let mut find_props_out = types::FindFocusableOutputProps::default();
+
+            let tabster = self.tabster.borrow();
+            let focusable = tabster.focusable.clone().unwrap_throw();
+            let mut focusable = focusable.borrow_mut();
+            next = if is_backward.unwrap_or_default() {
+                focusable.find_prev(find_props, &mut find_props_out)
+            } else {
+                focusable.find_next(find_props, &mut find_props_out)
+            };
+
+            out_of_dom_order = find_props_out.out_of_dom_order.unwrap_throw();
+
+            uncontrolled = find_props_out.uncontrolled;
+        }
+
+        Some(types::NextTabbable {
+            element: next,
+            uncontrolled,
+            out_of_dom_order: Some(out_of_dom_order),
+        })
     }
 
     pub fn accept_element(

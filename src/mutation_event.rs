@@ -66,7 +66,6 @@ pub fn observe_mutations(
                         }
                     }
                 } else {
-                    removed.length();
                     for i in 0..removed.length() {
                         let removed_node = removed.item(i).unwrap_throw();
                         removed_nodes.add(&removed_node);
@@ -97,6 +96,8 @@ pub fn observe_mutations(
             }
 
             removed_nodes.clear();
+
+            // tabster.modalizer?.hiddenUpdate();
         }
     };
 
@@ -142,9 +143,6 @@ fn update_tabster_elements(
             // element_by_uid = context.element_by_uid;
         }
     }
-    // if (!elementByUId) {
-    //     elementByUId = getInstanceContext(getWindow).elementByUId;
-    // }
 
     process_node(&tabster, node.clone().dyn_into().unwrap_throw(), removed);
 

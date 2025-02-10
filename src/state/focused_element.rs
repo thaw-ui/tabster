@@ -8,6 +8,7 @@ use crate::{
     root::RootAPI,
     tabster::TabsterCore,
     types::{self, GetTabsterContextOptions, NextTabbable, DOMAPI},
+    utils::get_last_child,
     web::set_timeout,
 };
 use std::{
@@ -48,7 +49,7 @@ impl FocusedElementState {
         is_backward: Option<bool>,
         ignore_accessibility: Option<bool>,
     ) -> Option<types::NextTabbable> {
-        let actual_container = if let Some(container) = container {
+        let actual_container = if let Some(container) = container.clone() {
             container
         } else if let Some(el) = ctx.root.get_element() {
             el
@@ -117,11 +118,11 @@ impl FocusedElementState {
                 }
             }
 
-            fn get_element(&self) {
+            fn get_element(&self) -> Option<HtmlElement> {
                 match self {
-                    What::Groupper(ref_cell) => todo!(),
-                    What::Mover(ref_cell) => todo!(),
-                    What::Modalizer(ref_cell) => todo!(),
+                    What::Groupper(groupper) => groupper.borrow().get_element(),
+                    What::Mover(mover) => mover.borrow().get_element(),
+                    What::Modalizer(modalizer) => modalizer.borrow().get_element(),
                 }
             }
         }
@@ -165,7 +166,7 @@ impl FocusedElementState {
                     tabster,
                     &current_element,
                     GetTabsterContextOptions {
-                        reference_element: Some(parent_element),
+                        reference_element: Some(parent_element.clone()),
                         check_rtl: None,
                     },
                 );
@@ -175,27 +176,33 @@ impl FocusedElementState {
                 };
 
                 let current_scope_element = what.get_element();
-                // const newCurrent = isBackward
-                //     ? currentScopeElement
-                //     : (currentScopeElement &&
-                //           getLastChild(currentScopeElement)) ||
-                //       currentScopeElement;
+                let new_current = if is_backward.unwrap_or_default() {
+                    current_scope_element
+                } else {
+                    if let Some(current_scope_element) = current_scope_element {
+                        Some(
+                            get_last_child(&current_scope_element).unwrap_or(current_scope_element),
+                        )
+                    } else {
+                        current_scope_element
+                    }
+                };
 
-                //                 if (newCurrent) {
-                //                     next = FocusedElementState.findNextTabbable(
-                //                         tabster,
-                //                         parentCtx,
-                //                         container,
-                //                         newCurrent,
-                //                         parentElement,
-                //                         isBackward,
-                //                         ignoreAccessibility
-                //                     );
+                if let Some(new_current) = new_current {
+                    *next = FocusedElementState::find_next_tabbable(
+                        tabster,
+                        parent_ctx,
+                        container,
+                        Some(new_current),
+                        Some(parent_element),
+                        is_backward,
+                        ignore_accessibility,
+                    );
 
-                //                     if (next) {
-                //                         next.outOfDOMOrder = true;
-                //                     }
-                //                 }
+                    if let Some(next) = next {
+                        next.out_of_dom_order = Some(true);
+                    }
+                }
             }
         };
 

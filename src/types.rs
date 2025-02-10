@@ -179,6 +179,8 @@ pub struct MoverProps {
 }
 pub struct ModalizerProps {
     pub is_always_accessible: Option<bool>,
+    /// A focus trap variant, keeps focus inside the modal when tabbing
+    pub is_trapped: Option<bool>,
 }
 
 #[derive(Debug, Default)]
