@@ -1,4 +1,5 @@
 use crate::{
+    console_error, console_log,
     groupper::Groupper,
     instance::{get_tabster_on_element, update_tabster_by_attribute},
     modalizer::{ArcCellModalizer, Modalizer},
@@ -116,10 +117,17 @@ impl RootAPI {
             let Some(new_cur_element) = cur_element.clone() else {
                 break;
             };
+
             if root.is_some() && check_rtl.unwrap_or_default() {
                 break;
             }
             let tabster_on_element = get_tabster_on_element(&tabster, &new_cur_element.clone());
+
+            console_log!(
+                "get_tabster_context loop:main {} {}",
+                new_cur_element.node_name(),
+                tabster_on_element.is_some()
+            );
 
             if check_rtl.unwrap_or_default() && dir_right_to_left.is_none() {
                 let dir = new_cur_element
@@ -247,6 +255,8 @@ impl RootAPI {
             }
         }
 
+        console_log!("get_tabster_context root.is_none() {}", root.is_none());
+
         // No root element could be found, try to get an auto root
         if root.is_none() {
             let mut tabster = tabster.borrow_mut();
@@ -268,9 +278,9 @@ impl RootAPI {
         #[cfg(debug_assertions)]
         if root.is_none() {
             if modalizer.is_some() || groupper.is_some() || mover.is_some() {
-                web_sys::console::error_1(&web_sys::wasm_bindgen::JsValue::from_str(
-                    "Tabster Root is required for Mover, Groupper and Modalizer to work.",
-                ));
+                console_error!(
+                    "Tabster Root is required for Mover, Groupper and Modalizer to work."
+                );
             }
         }
 

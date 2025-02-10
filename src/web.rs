@@ -1,6 +1,6 @@
 use web_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, UnwrapThrowExt},
-    Window,
+    Node, Window,
 };
 
 pub fn set_timeout(window: &Window, handler: impl Fn() + 'static, timeout: i32) -> i32 {
@@ -12,6 +12,10 @@ pub fn set_timeout(window: &Window, handler: impl Fn() + 'static, timeout: i32) 
             timeout,
         )
         .unwrap_throw()
+}
+
+pub fn console_log_node(node: &Node) {
+    web_sys::console::log_1(node);
 }
 
 #[macro_export]

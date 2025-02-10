@@ -1,4 +1,5 @@
 use crate::{
+    console_log,
     consts::FOCUSABLE_SELECTOR,
     dom_api::DOM,
     instance::get_tabster_on_element,
@@ -208,6 +209,11 @@ impl FocusableAPI {
             ..
         } = options;
 
+        console_log!(
+            "find_elements container:class_name {}",
+            container.class_name()
+        );
+
         let mut elements = Vec::<HtmlElement>::new();
 
         let accept_condition = accept_condition.unwrap_or_else({
@@ -363,11 +369,17 @@ impl FocusableAPI {
                 return Some(elements);
             }
 
+            console_log!("find_elements is_backward walker {}", last_child.tag_name());
+
             walker.set_current_node(&last_child);
         }
         loop {
+            let node = walker.current_node();
+            console_log!("find_elements loop:main {}", node.node_name());
             if matches!(is_backward, Some(true)) {
-                walker.previous_node().unwrap_throw();
+                let node = walker.previous_node().unwrap_throw();
+
+                console_log!("find_elements loop node:{:#?}", node.map(|n| n.node_name()));
             } else {
                 walker.next_node().unwrap_throw();
             }
@@ -670,6 +682,8 @@ impl FocusableAPI {
                 state.found_element = Some(element.clone());
             }
         }
+
+        console_log!("FocusableAPI accept_element {:#?}", result);
 
         result.unwrap()
     }

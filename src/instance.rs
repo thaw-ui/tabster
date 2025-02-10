@@ -3,6 +3,7 @@ use crate::{
     consts::TABSTER_ATTRIBUTE_NAME,
     tabster::TabsterCore,
     types::{self, TabsterAttributeOnElement, TabsterAttributeProps, TabsterOnElement},
+    web::console_log_node,
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{wasm_bindgen::UnwrapThrowExt, HtmlElement, Node};
@@ -22,6 +23,7 @@ pub fn update_tabster_by_attribute(
     element: &HtmlElement,
     dispose: Option<bool>,
 ) {
+    console_log_node(&element);
     console_log!("fn update_tabster_by_attribute");
     let mut tabster_ref = tabster.borrow_mut();
     let new_attr_value = if dispose.unwrap_or_default() || tabster_ref.noop {
@@ -73,7 +75,7 @@ pub fn update_tabster_by_attribute(
     {
         let mut entry = entry.borrow_mut();
         if entry.tabster.is_none() {
-            entry.tabster = Default::default();
+            entry.tabster = Some(Default::default());
         }
     }
     let mut entry = entry.borrow_mut();
