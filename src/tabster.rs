@@ -100,6 +100,7 @@ pub struct TabsterCore {
 
     // CoreAPIs
     internal: Option<Arc<RefCell<types::InternalAPI>>>,
+    /// .unwrap
     pub focused_element: Option<FocusedElementState>,
     /// .unwrap
     pub focusable: Option<Arc<RefCell<FocusableAPI>>>,
@@ -157,7 +158,7 @@ impl TabsterCore {
         tabster
     }
 
-    fn queue_init(&mut self, callback: impl FnOnce() + 'static) {
+    pub(crate) fn queue_init(&mut self, callback: impl FnOnce() + 'static) {
         let Some(win) = self.win.as_ref() else {
             return;
         };

@@ -7,6 +7,7 @@ use crate::{
     web::set_timeout,
     SysDummyInputsPositions,
 };
+use send_wrapper::SendWrapper;
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -18,38 +19,68 @@ use web_sys::{
     Document, Element, HtmlElement, HtmlInputElement, Node, NodeFilter, TreeWalker,
 };
 
-pub struct WeakHTMLElement<T, D> {
-    weak_ref: Option<T>,
+#[derive(Clone)]
+struct FakeWeakRef<T: DerefHtmlElement + Clone> {
+    target: Option<T>,
+}
+
+impl<T: DerefHtmlElement + Clone> FakeWeakRef<T> {
+    pub fn new(target: Option<T>) -> Self {
+        Self { target }
+    }
+}
+
+pub trait DerefHtmlElement {
+    fn deref(&self) -> Option<HtmlElement>;
+}
+
+impl<T: DerefHtmlElement + Clone> DerefHtmlElement for FakeWeakRef<T> {
+    fn deref(&self) -> Option<HtmlElement> {
+        if let Some(target) = &self.target {
+            target.deref()
+        } else {
+            None
+        }
+    }
+}
+
+impl DerefHtmlElement for HtmlElement {
+    fn deref(&self) -> Option<HtmlElement> {
+        Some(self.clone())
+    }
+}
+
+pub struct WeakHTMLElement<T: DerefHtmlElement + Clone, D> {
+    weak_ref: Option<FakeWeakRef<T>>,
     data: Option<D>,
 }
 
-impl<T, D: Clone> WeakHTMLElement<T, D> {
-    fn new(get_window: Arc<GetWindow>, element: T, data: Option<D>) -> Self {
+impl<T: DerefHtmlElement + Clone + 'static, D: Clone> WeakHTMLElement<T, D> {
+    pub fn new(get_window: Arc<GetWindow>, element: T, data: Option<D>) -> Self {
         let context = get_instance_context(&get_window);
 
-        // let ref: TabsterWeakRef<T>;
-        // if (context.WeakRef) {
-        //     ref = new context.WeakRef(element);
-        // } else {
-        //     ref = new FakeWeakRef(element);
-        //     context.fakeWeakRefs.push(ref);
-        // }
+        let weak_ref = FakeWeakRef::new(Some(element));
+        context
+            .fake_weak_refs
+            .write()
+            .unwrap()
+            .push(SendWrapper::new(Box::new(weak_ref.clone())));
 
         Self {
-            weak_ref: Some(element),
+            weak_ref: Some(weak_ref),
             data,
         }
     }
 
-    fn get(&self) -> Option<T> {
-        let element = None::<T>;
+    pub fn get(&mut self) -> Option<T> {
+        let mut element = None::<T>;
 
         if let Some(weak_ref) = &self.weak_ref {
-            // element = ref.deref();
+            element = weak_ref.target.clone();
 
-            // if (!element) {
-            //     delete this._ref;
-            // }
+            if element.is_none() {
+                self.weak_ref = None;
+            }
         }
 
         element
@@ -98,6 +129,10 @@ impl<P> TabsterPart<P> {
 
     pub fn get_props(&self) -> &P {
         &self.props
+    }
+
+    pub fn set_props(&mut self, props: P) {
+        self.props = props;
     }
 }
 
@@ -476,7 +511,7 @@ pub struct InstanceContext {
     // };
     last_container_bounding_rect_cache_id: i32,
     container_bounding_rect_cache_timer: Option<i32>,
-    // fakeWeakRefs: TabsterWeakRef<unknown>[];
+    fake_weak_refs: RwLock<Vec<SendWrapper<Box<dyn DerefHtmlElement>>>>,
     fake_weak_refs_timer: Option<i32>,
     fake_weak_refs_started: bool,
 }
@@ -509,12 +544,12 @@ pub fn get_instance_context(get_window: &Arc<GetWindow>) -> Arc<InstanceContext>
     //         WeakRef: win.WeakRef || undefined,
     //     },
     //     containerBoundingRectCache: {},
-    //     fakeWeakRefs: [],
     // };
     let ctx = Arc::new(InstanceContext {
         element_by_uid: Default::default(),
         last_container_bounding_rect_cache_id: 0,
         container_bounding_rect_cache_timer: None,
+        fake_weak_refs: Default::default(),
         fake_weak_refs_timer: None,
         fake_weak_refs_started: false,
     });

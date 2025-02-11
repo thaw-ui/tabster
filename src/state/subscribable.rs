@@ -1,10 +1,18 @@
 pub struct Subscribable<A> {
     val: Option<A>,
+    callbacks: Vec<Box<dyn FnOnce(A)>>,
 }
 
 impl<A> Subscribable<A> {
     pub fn new() -> Self {
-        Self { val: None }
+        Self {
+            val: None,
+            callbacks: vec![],
+        }
+    }
+
+    pub fn subscribe(&mut self, callback: impl FnOnce(A) + 'static) {
+        self.callbacks.push(Box::new(callback));
     }
 }
 

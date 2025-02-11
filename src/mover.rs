@@ -1,17 +1,19 @@
 use crate::{
     console_log,
     dom_api::DOM,
+    instance::get_tabster_on_element,
     state::focused_element::FOCUSED_ELEMENT_STATE_IS_TABBING,
     tabster::TabsterCore,
     types::{self, GetWindow, MoverProps, DOMAPI},
     utils::{
         get_dummy_input_container, DummyInputManager, NodeFilterEnum, TabsterPart, WeakHTMLElement,
     },
+    web::{add_event_listener_with_bool, EventListenerHandle},
 };
 use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
-    ops::Deref,
+    ops::{Deref, DerefMut},
     sync::{atomic::Ordering, Arc},
 };
 use web_sys::{
@@ -38,7 +40,7 @@ pub struct Mover {
     part: TabsterPart<types::MoverProps>,
 
     intersection_observer: Option<IntersectionObserver>,
-    current: Option<WeakHTMLElement<HtmlElement, u8>>,
+    current: Option<RefCell<WeakHTMLElement<HtmlElement, u8>>>,
 
     dummy_manager: Option<MoverDummyManager>,
     visibility_tolerance: f32,
@@ -49,6 +51,12 @@ impl Deref for Mover {
 
     fn deref(&self) -> &Self::Target {
         &self.part
+    }
+}
+
+impl DerefMut for Mover {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.part
     }
 }
 
@@ -221,14 +229,24 @@ impl Mover {
                 Some(state.from.clone().into()),
             ) || get_dummy_input_container(&Some(state.from.clone().into())) == mover_element)
         {
-            let found: Option<HtmlElement> = None;
+            let mut found: Option<HtmlElement> = None;
 
             if memorize_current.unwrap_or_default() {
-                // let current = self.current.get();
+                let current = if let Some(current) = &self.current {
+                    current.borrow_mut().get()
+                } else {
+                    None
+                };
 
-                //         if (current && state.acceptCondition(current)) {
-                //             found = current;
-                //         }
+                if let Some(current) = current {
+                    if (state.accept_condition)(current.clone()) {
+                        found = Some(current);
+                    }
+                }
+            }
+
+            if found.is_none() && has_default {
+                self.tabster.borrow().focusable.clone().map(|f| f);
             }
 
             //     if (!found && hasDefault) {
@@ -261,13 +279,13 @@ impl Mover {
             //         });
             //     }
 
-            //     if (found) {
-            //         state.found = true;
-            //         state.foundElement = found;
-            //         state.rejectElementsFrom = moverElement;
-            //         state.skippedFocusable = true;
-            //         return NodeFilter.FILTER_ACCEPT;
-            //     }
+            if let Some(found) = found {
+                state.found = Some(true);
+                state.found_element = Some(found);
+                state.reject_elements_from = mover_element;
+                state.skipped_focusable = Some(true);
+                return Some(*NodeFilterEnum::FilterAccept);
+            }
         }
 
         None
@@ -280,21 +298,107 @@ impl Mover {
             return;
         }
     }
+
+    fn set_current(&mut self, element: Option<HtmlElement>) {
+        if let Some(element) = element {
+            // self.current = Some(WeakHTMLElement::new(self.win, element, None));
+        } else {
+            self.current = None;
+        }
+    }
 }
 
 pub struct MoverAPI {
     tabster: Arc<RefCell<TabsterCore>>,
     win: Arc<GetWindow>,
     movers: HashMap<String, Arc<RefCell<Mover>>>,
+    event_listener_handle_keydown: Arc<RefCell<Option<EventListenerHandle>>>,
 }
 
 impl MoverAPI {
     pub fn new(tabster: Arc<RefCell<TabsterCore>>, get_window: Arc<GetWindow>) -> Self {
-        // tabster.queueInit(this._init);
+        let event_listener_handle_keydown: Arc<RefCell<Option<EventListenerHandle>>> =
+            Default::default();
+
+        tabster.borrow_mut().queue_init({
+            let tabster = tabster.clone();
+            let get_window = get_window.clone();
+            let event_listener_handle_keydown = event_listener_handle_keydown.clone();
+            move || {
+                let win = get_window();
+
+                *event_listener_handle_keydown.borrow_mut() = Some(add_event_listener_with_bool(
+                    win,
+                    "keydown",
+                    move |_: web_sys::KeyboardEvent| {
+                        // this._onKeyDown
+                    },
+                    true,
+                ));
+                // win.addEventListener(MoverMoveFocusEventName, this._onMoveFocus);
+                // win.addEventListener(
+                //     MoverMemorizedElementEventName,
+                //     this._onMemorizedElement
+                // );
+
+                let on_focus = {
+                    let tabster = tabster.clone();
+                    move |element: HtmlElement| {
+                        // When something in the app gets focused, we are making sure that
+                        // the relevant context Mover is aware of it.
+                        // Looking for the relevant context Mover from the currently
+                        // focused element parent, not from the element itself, because the
+                        // Mover element itself cannot be its own current (but might be
+                        // current for its parent Mover).
+                        let mut current_focusable_element = Some(element.clone());
+                        let mut deepest_focusable_element = element.clone();
+
+                        let mut el = DOM::get_parent_element(Some(element));
+                        while let Some(new_el) = el {
+                            // We go through all Movers up from the focused element and
+                            // set their current element to the deepest focusable of that
+                            // Mover.
+                            let mover = get_tabster_on_element(&tabster, &new_el)
+                                .map(|value| value.borrow().mover.clone())
+                                .flatten();
+
+                            if let Some(mover) = mover {
+                                mover
+                                    .borrow_mut()
+                                    .set_current(Some(deepest_focusable_element.clone()));
+                                current_focusable_element = None;
+                            }
+
+                            if current_focusable_element.is_none()
+                                && tabster.borrow().focusable.clone().is_some_and(|f| {
+                                    f.borrow().is_focusable(&new_el, None, None, None)
+                                })
+                            {
+                                deepest_focusable_element = new_el.clone();
+                                current_focusable_element = Some(new_el.clone());
+                            }
+
+                            el = DOM::get_parent_element(Some(new_el));
+                        }
+                    }
+                };
+
+                if let Some(focused_element) = tabster.borrow_mut().focused_element.as_mut() {
+                    focused_element.subscribe(on_focus);
+                }
+            }
+        });
         Self {
             tabster,
             win: get_window,
             movers: HashMap::new(),
+            event_listener_handle_keydown,
+        }
+    }
+
+    fn dispose(self) {
+        if let Some(handle) = self.event_listener_handle_keydown.borrow_mut().take() {
+            handle.remove();
         }
     }
 

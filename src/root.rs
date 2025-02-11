@@ -2,11 +2,12 @@ use crate::{
     console_error, console_log,
     groupper::Groupper,
     instance::{get_tabster_on_element, update_tabster_by_attribute},
-    modalizer::{ArcCellModalizer, Modalizer},
+    modalizer::ArcCellModalizer,
     mover::Mover,
     set_tabster_attribute,
     tabster::TabsterCore,
     types::{self, GetTabsterContextOptions, Root, TabsterContext},
+    web::add_event_listener,
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{
@@ -57,6 +58,7 @@ impl RootAPI {
             }
         } else if !self.auto_root_waiting {
             self.auto_root_waiting = true;
+            add_event_listener(doc, "readystatechange", move |_: web_sys::Event| {});
             // doc.addEventListener("readystatechange", this._autoRootCreate);
         }
 

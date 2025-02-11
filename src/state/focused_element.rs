@@ -13,6 +13,7 @@ use crate::{
 };
 use std::{
     cell::RefCell,
+    ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, AtomicI32, Ordering},
         Arc,
@@ -28,6 +29,20 @@ pub struct FocusedElementState {
     tabster: Arc<RefCell<TabsterCore>>,
     win: Arc<types::GetWindow>,
     subscribable: Subscribable<HtmlElement>,
+}
+
+impl Deref for FocusedElementState {
+    type Target = Subscribable<HtmlElement>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.subscribable
+    }
+}
+
+impl DerefMut for FocusedElementState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.subscribable
+    }
 }
 
 impl FocusedElementState {

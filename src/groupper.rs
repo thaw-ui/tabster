@@ -16,7 +16,7 @@ use crate::{
 use std::{
     cell::{RefCell, RefMut},
     collections::{HashMap, HashSet},
-    ops::Deref,
+    ops::{Deref, DerefMut},
     sync::Arc,
 };
 use web_sys::{
@@ -99,6 +99,12 @@ impl Deref for Groupper {
 
     fn deref(&self) -> &Self::Target {
         &self.part
+    }
+}
+
+impl DerefMut for Groupper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.part
     }
 }
 

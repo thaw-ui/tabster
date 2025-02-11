@@ -92,10 +92,10 @@ pub fn update_tabster_by_attribute(
     if let Some(new_tabster_props_groupper) = &new_tabster_props.groupper {
         let sys = new_tabster_props.sys.clone();
         let mut tabster_on_element = tabster_on_element.borrow_mut();
-        if tabster_on_element.groupper.is_some() {
-            // tabster_on_element.groupper.setProps(
-            //     newTabsterProps.groupper as Types.GroupperProps
-            // );
+        if let Some(groupper) = &tabster_on_element.groupper {
+            groupper
+                .borrow_mut()
+                .set_props(new_tabster_props_groupper.clone());
         } else {
             let groupper = tabster_ref.groupper.clone();
             drop(tabster_ref);
@@ -115,10 +115,10 @@ pub fn update_tabster_by_attribute(
     } else if let Some(new_tabster_props_mover) = &new_tabster_props.mover {
         let sys = new_tabster_props.sys.clone();
         let mut tabster_on_element = tabster_on_element.borrow_mut();
-        if tabster_on_element.mover.is_some() {
-            // tabsterOnElement.mover.setProps(
-            //     newTabsterProps.mover as Types.MoverProps
-            // );
+        if let Some(mover) = &tabster_on_element.mover {
+            mover
+                .borrow_mut()
+                .set_props(new_tabster_props_mover.clone());
         } else {
             let mover = tabster_ref.mover.clone();
             drop(tabster_ref);
