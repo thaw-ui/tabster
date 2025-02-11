@@ -26,7 +26,7 @@ struct MoverDummyManager(DummyInputManager);
 
 impl MoverDummyManager {
     fn new(
-        element: HtmlElement,
+        element: WeakHTMLElement,
         tabster: Arc<RefCell<TabsterCore>>,
         sys: Option<types::SysProps>,
     ) -> Self {
@@ -39,6 +39,7 @@ pub type ArcCellMover = Arc<RefCell<Mover>>;
 pub struct Mover {
     part: TabsterPart<types::MoverProps>,
 
+    win: Arc<GetWindow>,
     intersection_observer: Option<IntersectionObserver>,
     current: Option<RefCell<WeakHTMLElement<HtmlElement, u8>>>,
 
@@ -76,20 +77,22 @@ impl Mover {
         // const getMemorized = () =>
         //     props.memorizeCurrent ? this._current : undefined;
 
+        let win = { tabster.borrow().get_window.clone() };
+
         Self {
             part: TabsterPart::new(tabster.clone(), element.clone(), props.clone()),
+            win,
             intersection_observer: None,
             dummy_manager: None,
             visibility_tolerance,
             current: None,
         }
-        .init(tabster, element, props, sys)
+        .init(tabster, props, sys)
     }
 
     fn init(
         mut self,
         tabster: Arc<RefCell<TabsterCore>>,
-        element: &HtmlElement,
         props: types::MoverProps,
         sys: Option<types::SysProps>,
     ) -> Self {
@@ -100,7 +103,7 @@ impl Mover {
 
         self.dummy_manager = if !control_tab {
             Some(MoverDummyManager::new(
-                element.clone(),
+                self._element.clone(),
                 tabster,
                 // getMemorized,
                 sys,
@@ -301,10 +304,12 @@ impl Mover {
 
     fn set_current(&mut self, element: Option<HtmlElement>) {
         if let Some(element) = element {
-            // self.current = Some(WeakHTMLElement::new(self.win, element, None));
+            self.current = Some(WeakHTMLElement::new(self.win.clone(), element, None).into());
         } else {
             self.current = None;
         }
+
+        //TODO
     }
 }
 

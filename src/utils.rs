@@ -50,9 +50,18 @@ impl DerefHtmlElement for HtmlElement {
     }
 }
 
-pub struct WeakHTMLElement<T: DerefHtmlElement + Clone, D> {
-    weak_ref: Option<FakeWeakRef<T>>,
+pub struct WeakHTMLElement<T: DerefHtmlElement + Clone = HtmlElement, D = ()> {
+    weak_ref: RefCell<Option<FakeWeakRef<T>>>,
     data: Option<D>,
+}
+
+impl<T: DerefHtmlElement + Clone, D: Clone> Clone for WeakHTMLElement<T, D> {
+    fn clone(&self) -> Self {
+        Self {
+            weak_ref: self.weak_ref.clone(),
+            data: self.data.clone(),
+        }
+    }
 }
 
 impl<T: DerefHtmlElement + Clone + 'static, D: Clone> WeakHTMLElement<T, D> {
@@ -67,19 +76,19 @@ impl<T: DerefHtmlElement + Clone + 'static, D: Clone> WeakHTMLElement<T, D> {
             .push(SendWrapper::new(Box::new(weak_ref.clone())));
 
         Self {
-            weak_ref: Some(weak_ref),
+            weak_ref: Some(weak_ref).into(),
             data,
         }
     }
 
-    pub fn get(&mut self) -> Option<T> {
+    pub fn get(&self) -> Option<T> {
         let mut element = None::<T>;
 
-        if let Some(weak_ref) = &self.weak_ref {
+        if let Some(weak_ref) = self.weak_ref.borrow().as_ref() {
             element = weak_ref.target.clone();
 
             if element.is_none() {
-                self.weak_ref = None;
+                *self.weak_ref.borrow_mut() = None;
             }
         }
 
@@ -101,7 +110,7 @@ static LAST_TABSTER_PART_ID: OnceLock<RwLock<usize>> = OnceLock::new();
 pub struct TabsterPart<P> {
     pub id: String,
     pub tabster: Arc<RefCell<TabsterCore>>,
-    element: HtmlElement,
+    pub(crate) _element: WeakHTMLElement,
     pub props: P,
 }
 
@@ -110,17 +119,18 @@ impl<P> TabsterPart<P> {
         let last_tabster_part_id = LAST_TABSTER_PART_ID.get_or_init(Default::default);
         let id = *last_tabster_part_id.read().unwrap_throw() + 1;
         *last_tabster_part_id.write().unwrap_throw() = id;
+        let element = WeakHTMLElement::new(tabster.borrow().get_window.clone(), element, None);
 
         Self {
             id: format!("i{}", id),
             tabster,
-            element,
+            _element: element,
             props,
         }
     }
 
     pub fn get_element(&self) -> Option<HtmlElement> {
-        Some(self.element.clone())
+        self._element.get()
     }
 
     pub fn id(&self) -> &String {
@@ -142,13 +152,13 @@ pub struct DummyInputManager {
     instance: Option<Arc<RefCell<DummyInputManagerCore>>>,
     on_focus_in: Option<DummyInputFocusCallback>,
     on_focus_out: Option<DummyInputFocusCallback>,
-    element: HtmlElement,
+    element: WeakHTMLElement,
 }
 
 impl DummyInputManager {
     pub fn new(
         tabster: Arc<RefCell<TabsterCore>>,
-        element: HtmlElement,
+        element: WeakHTMLElement,
         sys: Option<types::SysProps>,
         outside_by_default: Option<bool>,
     ) -> Self {
@@ -176,7 +186,7 @@ impl DummyInputManager {
 struct DummyInputManagerCore {
     add_timer: Arc<RefCell<Option<i32>>>,
     get_window: Arc<GetWindow>,
-    element: Option<HtmlElement>,
+    element: Option<WeakHTMLElement>,
     is_outside: bool,
     first_dummy: Option<DummyInput>,
     last_dummy: Option<DummyInput>,
@@ -185,11 +195,11 @@ struct DummyInputManagerCore {
 impl DummyInputManagerCore {
     fn new(
         tabster: Arc<RefCell<TabsterCore>>,
-        element: HtmlElement,
+        element: WeakHTMLElement,
         sys: Option<types::SysProps>,
         outside_by_default: Option<bool>,
     ) -> Arc<RefCell<Self>> {
-        let el = element.clone();
+        let el = element.get().unwrap_throw();
 
         let forced_dummy_position = if let Some(sys) = sys.as_ref() {
             sys.dummy_inputs_position
@@ -216,6 +226,7 @@ impl DummyInputManagerCore {
                 is_phantom: None,
                 is_first: true,
             },
+            Some(element.clone()),
         );
         let last_dummy = DummyInput::new(
             get_window.clone(),
@@ -224,6 +235,7 @@ impl DummyInputManagerCore {
                 is_phantom: None,
                 is_first: true,
             },
+            Some(element.clone()),
         );
 
         let this = Arc::new(RefCell::new(Self {
@@ -275,7 +287,7 @@ impl DummyInputManagerCore {
     }
 
     fn ensure_position(&self) {
-        let element = self.element.clone();
+        let element = self.element.clone().map(|e| e.get()).flatten();
         let first_dummy_input = if let Some(first_dummy) = &self.first_dummy {
             first_dummy.input.clone()
         } else {
@@ -356,7 +368,12 @@ pub struct DummyInput {
 }
 
 impl DummyInput {
-    fn new(get_window: Arc<GetWindow>, is_outside: bool, props: DummyInputProps) -> Self {
+    fn new(
+        get_window: Arc<GetWindow>,
+        is_outside: bool,
+        props: DummyInputProps,
+        element: Option<WeakHTMLElement>,
+    ) -> Self {
         let win = get_window();
         let input: HtmlElement = win
             .document()

@@ -8,7 +8,7 @@ use crate::{
     types::{self, CachedGroupper, FindFirstProps, GetWindow, DOMAPI},
     utils::{
         get_adjacent_element, get_dummy_input_container, DummyInputManager, NodeFilterEnum,
-        TabsterPart,
+        TabsterPart, WeakHTMLElement,
     },
     web::set_timeout,
     GroupperTabbabilities,
@@ -28,7 +28,7 @@ struct GroupperDummyManager(DummyInputManager);
 
 impl GroupperDummyManager {
     fn new(
-        element: HtmlElement,
+        element: WeakHTMLElement,
         groupper: Arc<RefCell<Groupper>>,
         tabster: Arc<RefCell<TabsterCore>>,
         sys: Option<types::SysProps>,
@@ -37,44 +37,45 @@ impl GroupperDummyManager {
             DummyInputManager::new(tabster.clone(), element.clone(), sys, Some(true));
         dummy_input_manager.set_handlers(
             Some(Box::new(move |dummy_input, is_backward, related_target| {
-                let container = element.clone();
-                if let Some(input) = dummy_input.input {
-                    if let Some(ctx) =
-                        RootAPI::get_tabster_context(&tabster, &input, Default::default())
-                    {
-                        let mut groupper = groupper.borrow_mut();
-                        let mut next = if let Some(next_tabbable) = groupper.find_next_tabbable(
-                            related_target,
-                            None,
-                            Some(is_backward),
-                            Some(true),
-                        ) {
-                            next_tabbable.element
-                        } else {
-                            None
-                        };
-
-                        if next.is_none() {
-                            let current_element = if dummy_input.is_outside {
-                                Some(input)
-                            } else {
-                                get_adjacent_element(container, Some(!is_backward))
-                            };
-                            let next_tabbable = FocusedElementState::find_next_tabbable(
-                                &tabster,
-                                ctx,
-                                None,
-                                current_element,
+                if let Some(container) = element.get() {
+                    if let Some(input) = dummy_input.input {
+                        if let Some(ctx) =
+                            RootAPI::get_tabster_context(&tabster, &input, Default::default())
+                        {
+                            let mut groupper = groupper.borrow_mut();
+                            let mut next = if let Some(next_tabbable) = groupper.find_next_tabbable(
+                                related_target,
                                 None,
                                 Some(is_backward),
                                 Some(true),
-                            );
+                            ) {
+                                next_tabbable.element
+                            } else {
+                                None
+                            };
 
-                            next = next_tabbable.map(|n| n.element).flatten()
-                        }
+                            if next.is_none() {
+                                let current_element = if dummy_input.is_outside {
+                                    Some(input)
+                                } else {
+                                    get_adjacent_element(container, Some(!is_backward))
+                                };
+                                let next_tabbable = FocusedElementState::find_next_tabbable(
+                                    &tabster,
+                                    ctx,
+                                    None,
+                                    current_element,
+                                    None,
+                                    Some(is_backward),
+                                    Some(true),
+                                );
 
-                        if let Some(next) = next {
-                            native_focus(next);
+                                next = next_tabbable.map(|n| n.element).flatten()
+                            }
+
+                            if let Some(next) = next {
+                                native_focus(next);
+                            }
                         }
                     }
                 }
@@ -128,7 +129,7 @@ impl Groupper {
         };
         let dummy_manager = if !control_tab {
             Some(GroupperDummyManager::new(
-                element.clone(),
+                this.borrow()._element.clone(),
                 this.clone(),
                 tabster,
                 sys,

@@ -44,7 +44,9 @@ impl IgnoreKeydown {
     }
 }
 
+#[derive(Default)]
 pub struct FocusableProps {
+    pub is_default: Option<bool>,
     /// Do not determine an element's focusability based on aria-disabled.
     pub ignore_aria_disabled: Option<bool>,
     /// Exclude element (and all subelements) from Mover navigation.
@@ -256,6 +258,23 @@ impl From<FindNextProps> for FindFocusableProps {
     }
 }
 
+impl From<FindDefaultProps> for FindFocusableProps {
+    fn from(value: FindDefaultProps) -> Self {
+        Self {
+            container: value.container,
+            current_element: None,
+            reference_element: None,
+            include_programmatically_focusable: value.include_programmatically_focusable,
+            ignore_accessibility: value.ignore_accessibility,
+            use_active_modalizer: value.use_active_modalizer,
+            modalizer_id: value.modalizer_id,
+            is_backward: None,
+            accept_condition: None,
+            on_element: None,
+        }
+    }
+}
+
 impl From<FindAllProps> for FindFocusableProps {
     fn from(value: FindAllProps) -> Self {
         Self {
@@ -295,6 +314,21 @@ pub struct FindNextProps {
     /// Take active modalizer into account when searching for elements
     /// (the elements out of active modalizer will not be returned).
     pub use_active_modalizer: Option<bool>,
+}
+
+pub struct FindDefaultProps {
+    /// The container used for the search.
+    pub container: HtmlElement,
+    /// Search withing the specified modality, null for everything outside of modalizers, string within
+    /// a specific id, undefined for search within the current application state.
+    pub modalizer_id: Option<String>,
+    /// Includes elements that can be focused programmatically.
+    pub include_programmatically_focusable: Option<bool>,
+    /// Take active modalizer into account when searching for elements
+    /// (the elements out of active modalizer will not be returned).
+    pub use_active_modalizer: Option<bool>,
+    /// Ignore accessibility check.
+    pub ignore_accessibility: Option<bool>,
 }
 
 pub struct FindAllProps {

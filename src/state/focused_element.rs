@@ -96,10 +96,6 @@ impl FocusedElementState {
             Ordering::SeqCst,
         );
 
-        // const modalizer = ctx.modalizer;
-        // const groupper = ctx.groupper;
-        // const mover = ctx.mover;
-
         enum What {
             Groupper(ArcCellGroupper),
             Mover(ArcCellMover),

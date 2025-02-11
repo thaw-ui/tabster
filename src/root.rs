@@ -7,12 +7,11 @@ use crate::{
     set_tabster_attribute,
     tabster::TabsterCore,
     types::{self, GetTabsterContextOptions, Root, TabsterContext},
-    web::add_event_listener,
 };
 use std::{cell::RefCell, sync::Arc};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
-    Document, HtmlElement, KeyboardEvent, Node, Window,
+    HtmlElement, KeyboardEvent, Node, Window,
 };
 
 pub type WindowWithTabsterInstance = Window;
@@ -43,7 +42,7 @@ impl RootAPI {
         let body = doc.body();
 
         if let Some(body) = body {
-            self.auto_root_unwait(doc);
+            self.auto_root_unwait();
 
             if let Some(props) = &self.auto_root {
                 let mut new_props = types::TabsterAttributeProps::default();
@@ -58,14 +57,16 @@ impl RootAPI {
             }
         } else if !self.auto_root_waiting {
             self.auto_root_waiting = true;
-            add_event_listener(doc, "readystatechange", move |_: web_sys::Event| {});
-            // doc.addEventListener("readystatechange", this._autoRootCreate);
+            console_error!("RootAPI::auto_root_create: Uninitialized Body");
+            // add_event_listener(doc, "readystatechange", move |_: web_sys::Event| {
+            //     // this._autoRootCreate
+            // });
         }
 
         None
     }
 
-    fn auto_root_unwait(&mut self, doc: Document) {
+    fn auto_root_unwait(&mut self) {
         // doc.removeEventListener("readystatechange", this._autoRootCreate);
         self.auto_root_waiting = false;
     }

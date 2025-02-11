@@ -31,6 +31,18 @@ impl FocusableAPI {
         Self { tabster }
     }
 
+    pub fn get_props(&self, element: HtmlElement) -> Arc<types::FocusableProps> {
+        if let Some(tabster_on_element) = get_tabster_on_element(&self.tabster, &element) {
+            tabster_on_element
+                .borrow()
+                .focusable
+                .clone()
+                .unwrap_or_default()
+        } else {
+            Default::default()
+        }
+    }
+
     pub fn is_focusable(
         &self,
         el: &Element,
@@ -171,6 +183,28 @@ impl FocusableAPI {
         self.find_element(
             FindFocusableProps {
                 is_backward: Some(true),
+                ..options.into()
+            },
+            out,
+        )
+    }
+
+    pub fn find_default(
+        &mut self,
+        options: types::FindDefaultProps,
+        out: &mut FindFocusableOutputProps,
+    ) -> Option<HtmlElement> {
+        let include_programmatically_focusable = options.include_programmatically_focusable;
+
+        self.find_element(
+            FindFocusableProps {
+                accept_condition: Some(Box::new({
+                    let this = self.clone();
+                    move |el| {
+                        this.is_focusable(&el, include_programmatically_focusable, None, None)
+                            && this.get_props(el).is_default.unwrap_or_default()
+                    }
+                })),
                 ..options.into()
             },
             out,
