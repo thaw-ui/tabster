@@ -8,7 +8,7 @@ use crate::{
     utils::{
         get_dummy_input_container, DummyInputManager, NodeFilterEnum, TabsterPart, WeakHTMLElement,
     },
-    web::{add_event_listener_with_bool, EventListenerHandle},
+    web::{add_event_listener_with_bool, set_timeout, EventListenerHandle},
 };
 use std::{
     cell::{RefCell, RefMut},
@@ -41,7 +41,8 @@ pub struct Mover {
 
     win: Arc<GetWindow>,
     intersection_observer: Option<IntersectionObserver>,
-    current: Option<RefCell<WeakHTMLElement<HtmlElement, u8>>>,
+    set_current_timer: Option<i32>,
+    current: Option<RefCell<WeakHTMLElement>>,
 
     dummy_manager: Option<MoverDummyManager>,
     visibility_tolerance: f32,
@@ -85,6 +86,7 @@ impl Mover {
             intersection_observer: None,
             dummy_manager: None,
             visibility_tolerance,
+            set_current_timer: None,
             current: None,
         }
         .init(tabster, props, sys)
@@ -249,38 +251,65 @@ impl Mover {
             }
 
             if found.is_none() && has_default {
-                self.tabster.borrow().focusable.clone().map(|f| f);
+                found = self
+                    .tabster
+                    .borrow()
+                    .focusable
+                    .clone()
+                    .map(|f| {
+                        f.borrow_mut().find_default(
+                            types::FindDefaultProps {
+                                container: mover_element.clone().unwrap_throw(),
+                                modalizer_id: None,
+                                include_programmatically_focusable: None,
+                                use_active_modalizer: Some(true),
+                                ignore_accessibility: None,
+                            },
+                            &mut types::FindFocusableOutputProps::default(),
+                        )
+                    })
+                    .flatten();
             }
 
-            //     if (!found && hasDefault) {
-            //         found = this._tabster.focusable.findDefault({
-            //             container: moverElement,
-            //             useActiveModalizer: true,
-            //         });
-            //     }
-
-            //     if (!found && visibilityAware) {
-            //         found = this._tabster.focusable.findElement({
-            //             container: moverElement,
-            //             useActiveModalizer: true,
-            //             isBackward: state.isBackward,
-            //             acceptCondition: (el) => {
-            //                 const id = getElementUId(this._win, el);
-            //                 const visibility = this._visible[id];
-
-            //                 return (
-            //                     moverElement !== el &&
-            //                     !!this._allElements?.get(el) &&
-            //                     state.acceptCondition(el) &&
-            //                     (visibility === Visibilities.Visible ||
-            //                         (visibility === Visibilities.PartiallyVisible &&
-            //                             (visibilityAware ===
-            //                                 Visibilities.PartiallyVisible ||
-            //                                 !this._fullyVisible)))
-            //                 );
-            //             },
-            //         });
-            //     }
+            if found.is_none() && visibility_aware.unwrap_or_default() != 0 {
+                found = self
+                    .tabster
+                    .borrow()
+                    .focusable
+                    .clone()
+                    .map(|f| {
+                        f.borrow_mut().find_element(
+                            types::FindFocusableProps {
+                                container: mover_element.clone().unwrap_throw(),
+                                current_element: None,
+                                reference_element: None,
+                                include_programmatically_focusable: None,
+                                ignore_accessibility: None,
+                                use_active_modalizer: Some(true),
+                                modalizer_id: None,
+                                is_backward: state.is_backward,
+                                accept_condition: Some(Box::new(move |el| {
+                                    // const id = getElementUId(this._win, el);
+                                    // const visibility = this._visible[id];
+                                    // return (
+                                    //     moverElement !== el &&
+                                    //     !!this._allElements?.get(el) &&
+                                    //     state.acceptCondition(el) &&
+                                    //     (visibility === Visibilities.Visible ||
+                                    //         (visibility === Visibilities.PartiallyVisible &&
+                                    //             (visibilityAware ===
+                                    //                 Visibilities.PartiallyVisible ||
+                                    //                 !this._fullyVisible)))
+                                    // );
+                                    false
+                                })),
+                                on_element: None,
+                            },
+                            &mut types::FindFocusableOutputProps::default(),
+                        )
+                    })
+                    .flatten();
+            }
 
             if let Some(found) = found {
                 state.found = Some(true);
@@ -309,7 +338,18 @@ impl Mover {
             self.current = None;
         }
 
-        //TODO
+        if self.props.track_state.unwrap_or_default()
+            || self.props.visibility_aware.unwrap_or_default() != 0
+        {
+            self.set_current_timer = set_timeout(
+                &(self.win)(),
+                move || {
+                    // TODO
+                },
+                0,
+            )
+            .into();
+        }
     }
 }
 

@@ -215,7 +215,7 @@ impl FocusableAPI {
         self.find_elements(true, options.into(), out);
     }
 
-    fn find_element(
+    pub fn find_element(
         &mut self,
         options: FindFocusableProps,
         out: &mut FindFocusableOutputProps,
