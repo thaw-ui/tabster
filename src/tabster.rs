@@ -104,7 +104,8 @@ pub struct TabsterCore {
     pub focused_element: Option<FocusedElementState>,
     /// .unwrap
     pub focusable: Option<Arc<RefCell<FocusableAPI>>>,
-    pub root: Option<RootAPI>,
+    /// .unwrap
+    pub root: Option<Arc<RefCell<RootAPI>>>,
 
     // Extended APIs
     pub groupper: Option<Arc<RefCell<GroupperAPI>>>,
@@ -142,7 +143,7 @@ impl TabsterCore {
 
         let internal = Arc::new(RefCell::new(types::InternalAPI::new(win, tabster.clone())));
         let focused_element = FocusedElementState::new(tabster.clone(), get_window);
-        let root = RootAPI::new(tabster.clone(), props.auto_root);
+        let root = Arc::new(RefCell::new(RootAPI::new(tabster.clone(), props.auto_root)));
         {
             let mut tabster = tabster.borrow_mut();
             tabster.internal = Some(internal.clone());
@@ -253,15 +254,26 @@ pub fn get_groupper(tabster: &Tabster) -> Arc<RefCell<GroupperAPI>> {
 pub fn get_mover(tabster: &Tabster) -> Arc<RefCell<MoverAPI>> {
     console_log!("get_mover");
     let tabster_core = tabster.core.clone();
-    let mut tabster_core_ref = tabster_core.try_borrow_mut().unwrap_throw();
-
-    if tabster_core_ref.mover.is_none() {
-        console_log!("get_mover is_none");
-        tabster_core_ref.mover = Some(Arc::new(RefCell::new(MoverAPI::new(
-            tabster_core.clone(),
+    let (mover, get_window) = {
+        let tabster_core_ref = tabster_core.try_borrow_mut().unwrap_throw();
+        (
+            tabster_core_ref.mover.clone(),
             tabster_core_ref.get_window.clone(),
-        ))));
-    }
+        )
+    };
 
-    tabster_core_ref.mover.clone().unwrap_throw()
+    let mover = if let Some(mover) = mover {
+        mover
+    } else {
+        console_log!("get_mover is_none");
+        Arc::new(RefCell::new(MoverAPI::new(
+            tabster_core.clone(),
+            get_window,
+        )))
+    };
+
+    let mut tabster_core_ref = tabster_core.try_borrow_mut().unwrap_throw();
+    tabster_core_ref.mover = Some(mover.clone());
+
+    mover
 }

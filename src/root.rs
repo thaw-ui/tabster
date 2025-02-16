@@ -6,13 +6,42 @@ use crate::{
     mover::Mover,
     set_tabster_attribute,
     tabster::TabsterCore,
-    types::{self, GetTabsterContextOptions, Root, TabsterContext},
+    types::{self, GetTabsterContextOptions, RootProps, TabsterContext},
+    utils::TabsterPart,
 };
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, ops::Deref, sync::Arc};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
     HtmlElement, KeyboardEvent, Node, Window,
 };
+
+pub struct Root {
+    part: TabsterPart<RootProps>,
+
+    sys: Option<types::SysProps>,
+}
+
+impl Deref for Root {
+    type Target = TabsterPart<RootProps>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.part
+    }
+}
+
+impl Root {
+    pub fn new(
+        tabster: Arc<RefCell<TabsterCore>>,
+        element: &HtmlElement,
+        props: types::RootProps,
+        sys: Option<types::SysProps>,
+    ) -> Self {
+        Self {
+            part: TabsterPart::new(tabster.clone(), element.clone(), props),
+            sys,
+        }
+    }
+}
 
 pub type WindowWithTabsterInstance = Window;
 
@@ -37,7 +66,7 @@ impl RootAPI {
         }
     }
 
-    fn auto_root_create(&mut self) -> Option<Arc<types::Root>> {
+    fn auto_root_create(&mut self) -> Option<Arc<Root>> {
         let doc = (self.win)().document().unwrap_throw();
         let body = doc.body();
 
@@ -49,9 +78,11 @@ impl RootAPI {
                 new_props.root = Some(props.clone());
                 set_tabster_attribute(body.clone(), new_props, Some(true));
                 update_tabster_by_attribute(&self.tabster, &body, None);
+                console_log!("RootAPI::auto_root_create body");
                 let Some(tabster_on_element) = get_tabster_on_element(&self.tabster, &body) else {
                     return None;
                 };
+                console_log!("RootAPI::auto_root_create tabster_on_element some");
                 let tabster_on_element = tabster_on_element.borrow();
                 return tabster_on_element.root.clone();
             }
@@ -104,7 +135,7 @@ impl RootAPI {
             tabster.drain_init_queue();
         }
 
-        let mut root: Option<Arc<types::Root>> = None;
+        let mut root: Option<Arc<Root>> = None;
         let mut modalizer = None::<ArcCellModalizer>;
         let mut groupper = None::<Arc<RefCell<Groupper>>>;
         let mut mover = None::<Arc<RefCell<Mover>>>;
@@ -121,7 +152,7 @@ impl RootAPI {
                 break;
             };
 
-            if root.is_some() && check_rtl.unwrap_or_default() {
+            if root.is_some() && !check_rtl.unwrap_or_default() {
                 break;
             }
             let tabster_on_element = get_tabster_on_element(&tabster, &new_cur_element.clone());
@@ -151,6 +182,14 @@ impl RootAPI {
                 }
                 continue;
             };
+
+            {
+                let tabster_on_element = tabster_on_element.borrow();
+                console_log!(
+                    "get_tabster_context loop:tabster_on_element:root {}",
+                    tabster_on_element.root.is_some(),
+                );
+            }
 
             let tag_name = new_cur_element
                 .clone()
@@ -262,8 +301,9 @@ impl RootAPI {
 
         // No root element could be found, try to get an auto root
         if root.is_none() {
-            let mut tabster = tabster.borrow_mut();
-            if let Some(root_api) = tabster.root.as_mut() {
+            let tabster = tabster.borrow_mut();
+            if let Some(root_api) = &tabster.root {
+                let mut root_api = root_api.borrow_mut();
                 if root_api.auto_root.is_some() {
                     if let Some(owner_document) = element.owner_document() {
                         if owner_document.body().is_some() {
@@ -310,6 +350,27 @@ impl RootAPI {
         } else {
             None
         }
+    }
+
+    pub fn create_root(
+        &self,
+        element: &HtmlElement,
+        props: types::RootProps,
+        sys: Option<types::SysProps>,
+    ) -> Root {
+        // if (__DEV__) {
+        //     validateRootProps(props);
+        // }
+
+        let new_root = Root::new(self.tabster.clone(), &element, props, sys);
+
+        // this._roots[newRoot.id] = newRoot;
+
+        // if (this._forceDummy) {
+        //     newRoot.addDummyInputs();
+        // }
+
+        new_root
     }
 
     pub(crate) fn get_root(

@@ -3,8 +3,8 @@ use crate::{
     modalizer::{ArcCellModalizer, Modalizer},
     mover::Mover,
     mutation_event::observe_mutations,
+    root::Root,
     tabster::TabsterCore,
-    utils::TabsterPart,
 };
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::HashMap, ops::Deref, sync::Arc};
@@ -101,18 +101,6 @@ pub struct TabsterContext {
     pub excluded_from_mover: Option<bool>,
     pub uncontrolled: Option<HtmlElement>,
     pub ignore_keydown: Arc<dyn Fn(KeyboardEvent) -> bool>,
-}
-
-pub struct Root {
-    part: TabsterPart<RootProps>,
-}
-
-impl Deref for Root {
-    type Target = TabsterPart<RootProps>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.part
-    }
 }
 
 pub type SysDummyInputsPosition = u8;

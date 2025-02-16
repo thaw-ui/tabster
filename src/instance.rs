@@ -89,7 +89,31 @@ pub fn update_tabster_by_attribute(
         some_new_attr_object
     };
 
-    if let Some(new_tabster_props_groupper) = &new_tabster_props.groupper {
+    if let Some(new_tabster_props_root) = &new_tabster_props.root {
+        let sys = new_tabster_props.sys.clone();
+        let mut tabster_on_element = tabster_on_element.borrow_mut();
+
+        if let Some(root) = &tabster_on_element.root {
+            console_log!("root root.create_root");
+            // tabsterOnElement.root.setProps(
+            //     newTabsterProps.root as Types.RootProps
+            // );
+        } else {
+            let root = tabster_ref.root.clone();
+            drop(tabster_ref);
+            if let Some(root) = root {
+                console_log_node(&element);
+                console_log!("root.create_root");
+
+                let root = root
+                    .borrow()
+                    .create_root(element, new_tabster_props_root.clone(), sys);
+
+                tabster_on_element.root = Some(Arc::new(root));
+            }
+        }
+        // tabster.root.onRoot(tabsterOnElement.root);
+    } else if let Some(new_tabster_props_groupper) = &new_tabster_props.groupper {
         let sys = new_tabster_props.sys.clone();
         let mut tabster_on_element = tabster_on_element.borrow_mut();
         if let Some(groupper) = &tabster_on_element.groupper {
