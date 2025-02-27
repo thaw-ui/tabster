@@ -13,6 +13,12 @@ pub mod mover_directions {
     pub const GRID_LINEAR: u8 = 4; // Two-dimentional movement depending on the visual placement. Allows linear movement.
 }
 
+pub mod visibilities {
+    pub const INVISIBLE: u8 = 0;
+    pub const PARTIALLY_VISIBLE: u8 = 1;
+    pub const VISIBLE: u8 = 2;
+}
+
 pub enum GroupperTabbabilities {
     Unlimited,
     // The tabbability is limited to the container and explicit Enter is needed to go inside.

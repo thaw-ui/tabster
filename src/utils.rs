@@ -15,7 +15,13 @@ use std::{
     sync::{Arc, LazyLock, OnceLock, RwLock},
 };
 use web_sys::{
-    js_sys::{self, Reflect, Uint32Array}, wasm_bindgen::{self, prelude::{wasm_bindgen, Closure}, JsCast, JsValue, UnwrapThrowExt}, Document, Element, HtmlElement, HtmlInputElement, Node, NodeFilter, TreeWalker, Window
+    js_sys::{self, Reflect, Uint32Array},
+    wasm_bindgen::{
+        self,
+        prelude::{wasm_bindgen, Closure},
+        JsCast, JsValue, UnwrapThrowExt,
+    },
+    Document, Element, HtmlElement, HtmlInputElement, Node, NodeFilter, TreeWalker, Window,
 };
 
 #[derive(Clone)]
@@ -105,21 +111,24 @@ pub fn should_ignore_focus(element: &Element) -> bool {
 }
 
 fn to_base36(num: u32) -> String {
-    const CHARS: &[char] = &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-    
+    const CHARS: &[char] = &[
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+        'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    ];
+
     if num == 0 {
         return "0".to_string();
     }
-    
+
     let mut result = String::new();
     let mut n = num;
-    
+
     while n > 0 {
         let rem = n % 36;
         result.insert(0, CHARS[rem as usize]);
         n /= 36;
     }
-    
+
     result
 }
 
@@ -129,7 +138,9 @@ fn get_uid(wnd: Window) -> String {
     let rnd = Uint32Array::new(&JsValue::from(4));
 
     if let Ok(crypto) = wnd.crypto() {
-        crypto.get_random_values_with_array_buffer_view(&rnd).unwrap_throw();
+        crypto
+            .get_random_values_with_array_buffer_view(&rnd)
+            .unwrap_throw();
     } else {
         for i in 0..rnd.length() {
             // 4294967295 == 0xffffffff
@@ -149,32 +160,43 @@ fn get_uid(wnd: Window) -> String {
     srnd.push(to_base36(*uid_counter));
     srnd.push("|".to_string());
     let date = js_sys::Date::now();
-    // srnd.push(Date.now().toString(36));
+    srnd.push(to_base36(date as u32));
 
     srnd.join("")
 }
 
-pub fn get_element_uid(
-    get_window: &Arc<GetWindow>,
-    element: &HtmlElement,
-) -> String {
+pub fn get_element_uid(get_window: &Arc<GetWindow>, element: &HtmlElement) -> String {
     let context = get_instance_context(get_window);
-    let uid = Reflect::get(element, &JsValue::from_str("__tabsterElementUID")).unwrap_throw().as_string();
+    let uid = Reflect::get(element, &JsValue::from_str("__tabsterElementUID"))
+        .unwrap_throw()
+        .as_string();
 
     let uid = if let Some(uid) = uid {
         uid
     } else {
         let uid = get_uid(get_window());
-        Reflect::set(element, &JsValue::from_str("__tabsterElementUID"), &JsValue::from(uid.clone())).unwrap_throw().as_string();
+        Reflect::set(
+            element,
+            &JsValue::from_str("__tabsterElementUID"),
+            &JsValue::from(uid.clone()),
+        )
+        .unwrap_throw();
         uid
     };
 
-    // if (
-    //     !context.elementByUId[uid] &&
-    //     documentContains(element.ownerDocument, element)
-    // ) {
-    //     context.elementByUId[uid] = new WeakHTMLElement(getWindow, element);
-    // }
+    if !context
+        .element_by_uid
+        .read()
+        .unwrap_throw()
+        .contains_key(&uid)
+        && element
+            .owner_document()
+            .map(|doc| doc.body())
+            .flatten()
+            .map_or(false, move |body| body.contains(Some(&element)))
+    {
+        // context.elementByUId[uid] = new WeakHTMLElement(getWindow, element);
+    }
 
     uid
 }

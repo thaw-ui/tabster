@@ -6,8 +6,10 @@ use crate::{
     tabster::TabsterCore,
     types::{self, GetWindow, MoverProps, DOMAPI},
     utils::{
-        get_dummy_input_container, DummyInputManager, NodeFilterEnum, TabsterPart, WeakHTMLElement,
+        get_dummy_input_container, get_element_uid, DummyInputManager, NodeFilterEnum, TabsterPart,
+        WeakHTMLElement,
     },
+    visibilities,
     web::{add_event_listener_with_bool, set_timeout, EventListenerHandle},
 };
 use std::{
@@ -43,6 +45,8 @@ pub struct Mover {
     intersection_observer: Option<IntersectionObserver>,
     set_current_timer: Option<i32>,
     current: Option<RefCell<WeakHTMLElement>>,
+    visible: Arc<RefCell<HashMap<String, types::Visibility>>>,
+    fully_visible: Arc<RefCell<Option<String>>>,
 
     dummy_manager: Option<MoverDummyManager>,
     visibility_tolerance: f32,
@@ -71,7 +75,6 @@ impl Mover {
     ) -> Self {
         console_log!("Mover::new");
 
-        // this._win = tabster.getWindow;
         let visibility_tolerance = props.visibility_tolerance.unwrap_or(0.8);
 
         // this._onDispose = onDispose;
@@ -88,6 +91,8 @@ impl Mover {
             visibility_tolerance,
             set_current_timer: None,
             current: None,
+            visible: Default::default(),
+            fully_visible: Default::default(),
         }
         .init(tabster, props, sys)
     }
@@ -278,9 +283,13 @@ impl Mover {
                     .focusable
                     .clone()
                     .map(|f| {
+                        let win = self.win.clone();
+                        let visible = self.visible.clone();
+                        let mover_element = mover_element.clone().unwrap_throw();
+                        let fully_visible = self.fully_visible.clone();
                         f.borrow_mut().find_element(
                             types::FindFocusableProps {
-                                container: mover_element.clone().unwrap_throw(),
+                                container: mover_element.clone(),
                                 current_element: None,
                                 reference_element: None,
                                 include_programmatically_focusable: None,
@@ -289,8 +298,16 @@ impl Mover {
                                 modalizer_id: None,
                                 is_backward: state.is_backward,
                                 accept_condition: Some(Box::new(move |el| {
-                                    // const id = getElementUId(this._win, el);
-                                    // const visibility = this._visible[id];
+                                    let id = get_element_uid(&win, &el);
+                                    let visibility = visible.borrow().get(&id).cloned();
+
+                                    mover_element != el
+                                        && (visibility == Some(visibilities::VISIBLE)
+                                            || (visibility
+                                                == Some(visibilities::PARTIALLY_VISIBLE)
+                                                && (visibility_aware
+                                                    == Some(visibilities::PARTIALLY_VISIBLE)
+                                                    || fully_visible.borrow().is_none())))
                                     // return (
                                     //     moverElement !== el &&
                                     //     !!this._allElements?.get(el) &&
@@ -301,7 +318,6 @@ impl Mover {
                                     //                 Visibilities.PartiallyVisible ||
                                     //                 !this._fullyVisible)))
                                     // );
-                                    false
                                 })),
                                 on_element: None,
                             },
