@@ -12,11 +12,10 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     ops::Deref,
-    sync::{Arc, OnceLock, RwLock},
+    sync::{Arc, LazyLock, OnceLock, RwLock},
 };
 use web_sys::{
-    wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt},
-    Document, Element, HtmlElement, HtmlInputElement, Node, NodeFilter, TreeWalker,
+    js_sys::{self, Reflect, Uint32Array}, wasm_bindgen::{self, prelude::{wasm_bindgen, Closure}, JsCast, JsValue, UnwrapThrowExt}, Document, Element, HtmlElement, HtmlInputElement, Node, NodeFilter, TreeWalker, Window
 };
 
 #[derive(Clone)]
@@ -103,6 +102,81 @@ impl<T: DerefHtmlElement + Clone + 'static, D: Clone> WeakHTMLElement<T, D> {
 pub fn should_ignore_focus(element: &Element) -> bool {
     false
     // return !!(element as FocusedElementWithIgnoreFlag).__shouldIgnoreFocus;
+}
+
+fn to_base36(num: u32) -> String {
+    const CHARS: &[char] = &['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+    
+    if num == 0 {
+        return "0".to_string();
+    }
+    
+    let mut result = String::new();
+    let mut n = num;
+    
+    while n > 0 {
+        let rem = n % 36;
+        result.insert(0, CHARS[rem as usize]);
+        n /= 36;
+    }
+    
+    result
+}
+
+static UID_COUNTER: LazyLock<RwLock<u32>> = LazyLock::new(|| Default::default());
+
+fn get_uid(wnd: Window) -> String {
+    let rnd = Uint32Array::new(&JsValue::from(4));
+
+    if let Ok(crypto) = wnd.crypto() {
+        crypto.get_random_values_with_array_buffer_view(&rnd).unwrap_throw();
+    } else {
+        for i in 0..rnd.length() {
+            // 4294967295 == 0xffffffff
+            rnd.set_index(i, (4294967295.0 * js_sys::Math::random()) as u32);
+        }
+    }
+
+    let mut srnd: Vec<String> = vec![];
+
+    for i in 0..rnd.length() {
+        srnd.push(to_base36(rnd.get_index(i)));
+    }
+
+    srnd.push("|".to_string());
+    let mut uid_counter = UID_COUNTER.write().unwrap_throw();
+    *uid_counter += 1;
+    srnd.push(to_base36(*uid_counter));
+    srnd.push("|".to_string());
+    let date = js_sys::Date::now();
+    // srnd.push(Date.now().toString(36));
+
+    srnd.join("")
+}
+
+pub fn get_element_uid(
+    get_window: &Arc<GetWindow>,
+    element: &HtmlElement,
+) -> String {
+    let context = get_instance_context(get_window);
+    let uid = Reflect::get(element, &JsValue::from_str("__tabsterElementUID")).unwrap_throw().as_string();
+
+    let uid = if let Some(uid) = uid {
+        uid
+    } else {
+        let uid = get_uid(get_window());
+        Reflect::set(element, &JsValue::from_str("__tabsterElementUID"), &JsValue::from(uid.clone())).unwrap_throw().as_string();
+        uid
+    };
+
+    // if (
+    //     !context.elementByUId[uid] &&
+    //     documentContains(element.ownerDocument, element)
+    // ) {
+    //     context.elementByUId[uid] = new WeakHTMLElement(getWindow, element);
+    // }
+
+    uid
 }
 
 static LAST_TABSTER_PART_ID: OnceLock<RwLock<usize>> = OnceLock::new();
