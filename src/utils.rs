@@ -16,11 +16,7 @@ use std::{
 };
 use web_sys::{
     js_sys::{self, Reflect, Uint32Array},
-    wasm_bindgen::{
-        self,
-        prelude::{wasm_bindgen, Closure},
-        JsCast, JsValue, UnwrapThrowExt,
-    },
+    wasm_bindgen::{prelude::Closure, JsCast, JsValue, UnwrapThrowExt},
     Document, Element, HtmlElement, HtmlInputElement, Node, NodeFilter, TreeWalker, Window,
 };
 

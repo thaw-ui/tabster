@@ -5,19 +5,39 @@ use crate::{
     modalizer::ArcCellModalizer,
     mover::Mover,
     set_tabster_attribute,
-    tabster::TabsterCore,
+    tabster::{ArcCellTabsterCore, TabsterCore},
     types::{self, GetTabsterContextOptions, RootProps, TabsterContext},
-    utils::TabsterPart,
+    utils::{get_element_uid, DummyInputManager, TabsterPart},
 };
-use std::{cell::RefCell, ops::Deref, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 use web_sys::{
     wasm_bindgen::{JsCast, UnwrapThrowExt},
     HtmlElement, KeyboardEvent, Node, Window,
 };
 
+struct RootDummyManager {
+    // dummy_input_manager: DummyInputManager,
+}
+
+impl RootDummyManager {
+    fn new(tabster: ArcCellTabsterCore) -> Self {
+        Self {
+            // dummy_input_manager: DummyInputManager::new(tabster, element, sys, outside_by_default)
+        }
+    }
+}
+
+pub type ArcCellRoot = Arc<RefCell<Root>>;
+
 pub struct Root {
     part: TabsterPart<RootProps>,
-
+    uid: String,
+    dummy_manager: Option<RootDummyManager>,
     sys: Option<types::SysProps>,
 }
 
@@ -29,6 +49,12 @@ impl Deref for Root {
     }
 }
 
+impl DerefMut for Root {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.part
+    }
+}
+
 impl Root {
     pub fn new(
         tabster: Arc<RefCell<TabsterCore>>,
@@ -36,10 +62,27 @@ impl Root {
         props: types::RootProps,
         sys: Option<types::SysProps>,
     ) -> Self {
+        let win = tabster.borrow().get_window.clone();
         Self {
             part: TabsterPart::new(tabster.clone(), element.clone(), props),
+            uid: get_element_uid(&win, element),
+            dummy_manager: None,
             sys,
         }
+    }
+
+    fn add_dummy_inputs(&mut self) {
+        if self.dummy_manager.is_none() {
+            self.dummy_manager = Some(RootDummyManager::new(self.tabster.clone()))
+        }
+        // if (!this._dummyManager) {
+        //     this._dummyManager = new RootDummyManager(
+        //         this._tabster,
+        //         this._element,
+        //         this._setFocused,
+        //         this._sys
+        //     );
+        // }
     }
 }
 
@@ -50,6 +93,9 @@ pub struct RootAPI {
     win: Arc<Box<dyn Fn() -> Window>>,
     auto_root_waiting: bool,
     auto_root: Option<types::RootProps>,
+    roots: HashMap<String, ArcCellRoot>,
+    force_dummy: bool,
+    root_by_id: HashMap<String, ArcCellRoot>,
 }
 
 impl RootAPI {
@@ -63,10 +109,13 @@ impl RootAPI {
             win,
             auto_root,
             auto_root_waiting: false,
+            roots: Default::default(),
+            force_dummy: false,
+            root_by_id: Default::default(),
         }
     }
 
-    fn auto_root_create(&mut self) -> Option<Arc<Root>> {
+    fn auto_root_create(&mut self) -> Option<ArcCellRoot> {
         let doc = (self.win)().document().unwrap_throw();
         let body = doc.body();
 
@@ -135,7 +184,7 @@ impl RootAPI {
             tabster.drain_init_queue();
         }
 
-        let mut root: Option<Arc<Root>> = None;
+        let mut root: Option<ArcCellRoot> = None;
         let mut modalizer = None::<ArcCellModalizer>;
         let mut groupper = None::<Arc<RefCell<Groupper>>>;
         let mut mover = None::<Arc<RefCell<Mover>>>;
@@ -353,30 +402,40 @@ impl RootAPI {
     }
 
     pub fn create_root(
-        &self,
+        &mut self,
         element: &HtmlElement,
         props: types::RootProps,
         sys: Option<types::SysProps>,
-    ) -> Root {
+    ) -> ArcCellRoot {
         // if (__DEV__) {
         //     validateRootProps(props);
         // }
 
         let new_root = Root::new(self.tabster.clone(), &element, props, sys);
+        let new_root_id = new_root.id.clone();
+        let new_root = Arc::new(RefCell::new(new_root));
 
-        // this._roots[newRoot.id] = newRoot;
+        self.roots.insert(new_root_id, new_root.clone());
 
-        // if (this._forceDummy) {
-        //     newRoot.addDummyInputs();
-        // }
+        if self.force_dummy {
+            new_root.borrow_mut().add_dummy_inputs();
+        }
 
         new_root
+    }
+
+    fn add_dummy_inputs(&mut self) {
+        self.force_dummy = true;
+
+        for root in self.roots.values() {
+            root.borrow_mut().add_dummy_inputs();
+        }
     }
 
     pub(crate) fn get_root(
         tabster: &Arc<RefCell<TabsterCore>>,
         element: HtmlElement,
-    ) -> Option<Arc<Root>> {
+    ) -> Option<ArcCellRoot> {
         let mut el = Some(element);
         while let Some(new_el) = el.clone() {
             let root = get_tabster_on_element(tabster, &new_el)
@@ -392,5 +451,14 @@ impl RootAPI {
         }
 
         None
+    }
+
+    pub fn on_root(&mut self, root: ArcCellRoot, removed: Option<bool>) {
+        let uid = root.borrow().uid.clone();
+        if removed.unwrap_or_default() {
+            self.root_by_id.remove(&uid);
+        } else {
+            self.root_by_id.insert(uid, root);
+        }
     }
 }

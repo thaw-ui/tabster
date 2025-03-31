@@ -89,6 +89,8 @@ impl TabsterCoreStorage {
     }
 }
 
+pub type ArcCellTabsterCore = Arc<RefCell<TabsterCore>>;
+
 pub struct TabsterCore {
     storage: TabsterCoreStorage,
     win: Option<WindowWithTabsterInstance>,

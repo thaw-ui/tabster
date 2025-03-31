@@ -43,7 +43,7 @@ impl Modalizer {
             .clone()
             .map(|current_element| {
                 RootAPI::get_root(&self.tabster, current_element)
-                    .map(|root| root.get_element())
+                    .map(|root| root.borrow().get_element())
                     .flatten()
             })
             .flatten();

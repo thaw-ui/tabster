@@ -3,11 +3,11 @@ use crate::{
     modalizer::{ArcCellModalizer, Modalizer},
     mover::Mover,
     mutation_event::observe_mutations,
-    root::Root,
+    root::ArcCellRoot,
     tabster::TabsterCore,
 };
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, collections::HashMap, ops::Deref, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use web_sys::{
     wasm_bindgen::UnwrapThrowExt, Document, Element, HtmlElement, HtmlInputElement, KeyboardEvent,
     MutationObserver, MutationRecord, Node, NodeFilter, NodeList, TreeWalker, Window,
@@ -90,7 +90,7 @@ pub struct GetTabsterContextOptions {
 
 #[derive(Clone)]
 pub struct TabsterContext {
-    pub root: Arc<Root>,
+    pub root: ArcCellRoot,
     pub modalizer: Option<Arc<RefCell<Modalizer>>>,
     pub groupper: Option<Arc<RefCell<Groupper>>>,
     pub mover: Option<Arc<RefCell<Mover>>>,
@@ -439,7 +439,7 @@ pub struct TabsterAttributeOnElement {
 
 #[derive(Default)]
 pub struct TabsterOnElement {
-    pub root: Option<Arc<Root>>,
+    pub root: Option<ArcCellRoot>,
     pub mover: Option<Arc<RefCell<Mover>>>,
     pub groupper: Option<Arc<RefCell<Groupper>>>,
     pub modalizer: Option<ArcCellModalizer>,

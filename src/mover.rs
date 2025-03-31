@@ -120,11 +120,14 @@ impl Mover {
         };
 
         if props.track_state.unwrap_or_default() || props.visibility_aware.unwrap_or_default() > 0 {
-            let on_intersection: Closure<dyn Fn(Vec<IntersectionObserverEntry>)> = Closure::new(
-                move |entries: Vec<IntersectionObserverEntry>| {
-                    for entry in entries.into_iter() {}
-                },
-            );
+            let win = self.win.clone();
+            let on_intersection: Closure<dyn Fn(Vec<IntersectionObserverEntry>)> =
+                Closure::new(move |entries: Vec<IntersectionObserverEntry>| {
+                    for entry in entries.into_iter() {
+                        let el = entry.target().dyn_into::<HtmlElement>().unwrap_throw();
+                        let id = get_element_uid(&win, &el);
+                    }
+                });
             let on_intersection = on_intersection.into_js_value();
             let options = IntersectionObserverInit::new();
             let threshold =

@@ -69,7 +69,7 @@ impl FocusedElementState {
     ) -> Option<types::NextTabbable> {
         let actual_container = if let Some(container) = container.clone() {
             container
-        } else if let Some(el) = ctx.root.get_element() {
+        } else if let Some(el) = ctx.root.borrow().get_element() {
             el
         } else {
             return None;
